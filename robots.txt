@@ -1,0 +1,3 @@
+User-agent: *
+Allow: /
+Sitemap: https://dokkan-battle-atk-calculator.netlify.app/sitemap.xml
