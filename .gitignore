@@ -2,9 +2,9 @@
 js/data.js
 js/formulas.js
 
-# Backup files
-*-backup.js
-*.bak
+# But DO include the obfuscated versions
+#!js/data-obfuscated.js
+#!js/formulas-obfuscated.js
 
 # Node modules
 node_modules/
