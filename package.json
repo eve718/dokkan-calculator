@@ -4,8 +4,9 @@
   "description": "Dokkan Battle ATK Calculator",
   "scripts": {
     "obfuscate": "javascript-obfuscator js/data.js --output js/data-obfuscated.js && javascript-obfuscator js/formulas.js --output js/formulas-obfuscated.js",
-    "build": "npm run obfuscate",
-    "dev": "npm run obfuscate && live-server"
+    "prebuild": "npm run obfuscate",
+    "build": "echo 'Build completed'",
+    "netlify-build": "npm run obfuscate"
   },
   "devDependencies": {
     "javascript-obfuscator": "^4.0.0"

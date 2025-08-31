@@ -1,8 +1,12 @@
-# Original source files (don't include in Git)
+# Original source files
 js/data.js
 js/formulas.js
 
-# Node modules (if you used npm)
+# Backup files
+*-backup.js
+*.bak
+
+# Node modules
 node_modules/
 
 # Environment variables
