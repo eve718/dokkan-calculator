@@ -2,33 +2,66 @@
 let currentPage = 'events';
 let currentEventId = null;
 let currentStageId = null;
+// Improved animation handling
+let currentContentView = null;
 
 // Function to show different pages
 function showPage(page, eventId = null, stageId = null) {
+    const contentDiv = document.getElementById('content');
+    const breadcrumbDiv = document.getElementById('breadcrumb');
+
+    // Update state
     currentPage = page;
     currentEventId = eventId;
     currentStageId = stageId;
 
-    const contentDiv = document.getElementById('content');
-    const breadcrumbDiv = document.getElementById('breadcrumb');
-
     // Update breadcrumb
     updateBreadcrumb();
 
-    // Clear content
-    contentDiv.innerHTML = '';
+    // Create new content container
+    const newContent = document.createElement('div');
+    newContent.className = 'page-content';
 
     // Load appropriate content
     switch (page) {
         case 'events':
-            showEventsPage(contentDiv);
+            showEventsPage(newContent);
             break;
         case 'stages':
-            showStagesPage(contentDiv, eventId);
+            showStagesPage(newContent, eventId);
             break;
         case 'enemies':
-            showEnemiesPage(contentDiv, eventId, stageId);
+            showEnemiesPage(newContent, eventId, stageId);
             break;
+    }
+
+    // If there's current content, fade it out
+    if (currentContentView) {
+        currentContentView.classList.remove('active');
+
+        // Wait for fade out to complete
+        setTimeout(() => {
+            contentDiv.innerHTML = '';
+            contentDiv.appendChild(newContent);
+
+            // Trigger reflow to ensure animation works
+            void newContent.offsetWidth;
+
+            // Fade in new content
+            newContent.classList.add('active');
+            currentContentView = newContent;
+        }, 300);
+    } else {
+        // First page load
+        contentDiv.innerHTML = '';
+        contentDiv.appendChild(newContent);
+
+        // Trigger reflow
+        void newContent.offsetWidth;
+
+        // Fade in new content
+        newContent.classList.add('active');
+        currentContentView = newContent;
     }
 }
 
@@ -158,7 +191,26 @@ function showEnemiesPage(container, eventId, stageId) {
     phaseSelect.addEventListener('change', function () {
         const selectedPhaseId = this.value;
         const selectedPhase = stage.phases.find(p => p.id === selectedPhaseId);
-        displayEnemiesForPhase(enemyFormsContainer, selectedPhase);
+
+        // Add fade-out animation to enemy forms container
+        const enemyFormsContainer = document.getElementById('enemy-forms-container');
+        if (enemyFormsContainer) {
+            enemyFormsContainer.classList.add('fade-out');
+        }
+
+        // Wait for animation to complete before changing content
+        setTimeout(() => {
+            displayEnemiesForPhase(enemyFormsContainer, selectedPhase);
+
+            // Add fade-in animation
+            enemyFormsContainer.classList.remove('fade-out');
+            enemyFormsContainer.classList.add('fade-in');
+
+            // Remove animation class after completion
+            setTimeout(() => {
+                enemyFormsContainer.classList.remove('fade-in');
+            }, 300);
+        }, 300);
     });
 
     phaseSelectContainer.appendChild(phaseLabel);
@@ -216,6 +268,8 @@ function displayEnemiesForPhase(container, phase) {
                 inputField.type = 'checkbox';
                 inputField.id = `${enemy.id}_${input.id}`;
                 inputField.checked = input.default || false;
+                inputField.className = 'form-checkbox';
+
 
                 // Add event listener
                 inputField.addEventListener('change', function () {
@@ -234,7 +288,9 @@ function displayEnemiesForPhase(container, phase) {
                 inputField.id = `${enemy.id}_${input.id}`;
                 inputField.min = input.min || 0;
                 inputField.max = input.max || 100;
-                inputField.value = input.default || 0;
+                inputField.placeholder = input.default || 0; // Set placeholder to default value
+                inputField.value = ''; // Start with empty value
+                inputField.className = 'form-input';
 
                 formGroup.appendChild(label);
                 formGroup.appendChild(inputField);
@@ -243,14 +299,12 @@ function displayEnemiesForPhase(container, phase) {
             // Add input validation for number inputs
             if (input.type === 'number') {
                 inputField.addEventListener('input', function () {
-                    validateInputRange(this, input.min, input.max);
-                    calculateATK(enemy);
+                    // Debounced validation and calculation
+                    debouncedValidation(this, input.min, input.max, enemy);
                 });
 
-                inputField.addEventListener('change', function () {
-                    validateInputRange(this, input.min, input.max);
-                    calculateATK(enemy);
-                });
+                // Add real-time validation
+                setupInputValidation(inputField, input.min, input.max, enemy);
             } else if (input.type === 'checkbox') {
                 inputField.addEventListener('change', function () {
                     calculateATK(enemy);
@@ -276,23 +330,49 @@ function displayEnemiesForPhase(container, phase) {
         enemyForm.appendChild(resultsContainer);
         container.appendChild(enemyForm);
 
-        // Initial calculation
+        // After creating all enemy forms, calculate initial ATK
+        setTimeout(() => {
+            phase.enemies.forEach(enemy => {
+                calculateATKWithRetry(enemy);
+            });
+        }, 100);
+    });
+}
+
+// Initialize all calculations with default values
+function initializeAllCalculations() {
+    // This will be called after all enemies are loaded
+    const event = gameData.events.find(e => e.id === currentEventId);
+    if (!event) return;
+
+    const stage = event.stages.find(s => s.id === currentStageId);
+    if (!stage) return;
+
+    // Get the current phase (first phase by default)
+    const phase = stage.phases[0];
+    if (!phase) return;
+
+    // Calculate ATK for each enemy in the phase
+    phase.enemies.forEach(enemy => {
         calculateATK(enemy);
     });
 }
 
 // Function to validate input range
 function validateInputRange(inputElement, min, max) {
-    let value = parseFloat(inputElement.value);
+    let value = inputElement.value.trim();
+
+    // If empty, keep it empty (will use placeholder value)
+    if (value === '') {
+        return;
+    }
+
+    value = parseFloat(value);
 
     // If not a number, set to minimum
     if (isNaN(value)) {
         inputElement.value = min;
-        return;
-    }
-
-    // Clamp value to min/max range
-    if (value < min) {
+    } else if (value < min) {
         inputElement.value = min;
     } else if (value > max) {
         inputElement.value = max;

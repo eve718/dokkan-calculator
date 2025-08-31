@@ -58,7 +58,8 @@ h4 {
   border-radius: 8px;
   padding: 20px;
   box-shadow: 0 2px 5px rgba(0, 0, 0, 0.3);
-  transition: transform 0.2s, box-shadow 0.2s;
+  transition: all 0.3s ease;
+  transform: translateY(0);
   cursor: pointer;
   position: relative;
   overflow: hidden;
@@ -95,7 +96,7 @@ h4 {
 
 .card:hover {
   transform: translateY(-5px);
-  box-shadow: 0 5px 15px rgba(0, 0, 0, 0.3);
+  box-shadow: 0 10px 20px rgba(0, 0, 0, 0.2);
 }
 
 /* Form styles for enemy calculator */
@@ -148,6 +149,7 @@ h4 {
   background-color: #2d3748;
   color: #e2e8f0;
   border: 1px solid #718096;
+  transition: border-color 0.3s ease, box-shadow 0.3s ease;
 }
 
 .form-group input[type="number"] {
@@ -157,6 +159,28 @@ h4 {
   border: 1px solid #718096;
   border-radius: 4px;
   text-align: center;
+  background-color: #2d3748;
+  color: #e2e8f0;
+  transition: border-color 0.3s ease, box-shadow 0.3s ease;
+}
+
+.form-group input[type="number"]:focus {
+  border-color: #63b3ed;
+  box-shadow: 0 0 0 2px rgba(99, 179, 237, 0.3);
+}
+
+/* Remove default browser styles for inputs */
+input[type="number"] {
+  -webkit-appearance: none;
+  -moz-appearance: textfield;
+  appearance: none;
+}
+
+/* Remove spinner buttons in Webkit browsers */
+input[type="number"]::-webkit-outer-spin-button,
+input[type="number"]::-webkit-inner-spin-button {
+  -webkit-appearance: none;
+  margin: 0;
 }
 
 label {
@@ -219,11 +243,13 @@ select {
   border-radius: 4px;
   border: none;
   cursor: pointer;
-  transition: background-color 0.2s;
+  transition: all 0.3s ease;
 }
 
 .back-button:hover {
   background: #2c5282;
+  transform: translateY(-2px);
+  box-shadow: 0 4px 8px rgba(0, 0, 0, 0.2);
 }
 
 .results-container {
@@ -378,7 +404,7 @@ input[type="checkbox"] {
   border: 2px solid #63b3ed;
   border-radius: 3px;
   outline: none;
-  transition: all 0.2s ease;
+  transition: all 0.3s ease;
   position: relative;
   background-color: #2d3748;
 }
@@ -444,4 +470,138 @@ footer {
 footer p {
   color: #cbd5e0;
   margin: 0.5rem 0;
+}
+
+/* Improved animation system */
+.content-container {
+  position: relative;
+  min-height: 400px;
+  overflow: hidden;
+}
+
+.page-content {
+  opacity: 0;
+  transform: translateY(20px);
+  transition: opacity 0.3s ease, transform 0.3s ease;
+  position: absolute;
+  width: 100%;
+  top: 0;
+  left: 0;
+}
+
+.page-content.active {
+  opacity: 1;
+  transform: translateY(0);
+  position: relative;
+}
+
+/* Remove outline from all input elements */
+input:focus,
+input:active,
+select:focus,
+select:active,
+textarea:focus,
+textarea:active {
+  outline: none !important;
+  box-shadow: none !important;
+}
+
+/* Placeholder styling */
+input::placeholder {
+  color: #a0aec0;
+  opacity: 0.7;
+}
+
+/* Animation classes */
+.fade-in {
+  animation: fadeIn 0.3s ease-in-out;
+}
+
+.fade-out {
+  animation: fadeOut 0.3s ease-in-out;
+}
+
+.slide-in-right {
+  animation: slideInRight 0.3s ease-in-out;
+}
+
+.slide-out-left {
+  animation: slideOutLeft 0.3s ease-in-out;
+}
+
+/* Keyframes for animations */
+@keyframes fadeIn {
+  from {
+    opacity: 0;
+  }
+  to {
+    opacity: 1;
+  }
+}
+
+@keyframes fadeOut {
+  from {
+    opacity: 1;
+  }
+  to {
+    opacity: 0;
+  }
+}
+
+@keyframes slideInRight {
+  from {
+    opacity: 0;
+    transform: translateX(20px);
+  }
+  to {
+    opacity: 1;
+    transform: translateX(0);
+  }
+}
+
+@keyframes slideOutLeft {
+  from {
+    opacity: 1;
+    transform: translateX(0);
+  }
+  to {
+    opacity: 0;
+    transform: translateX(-20px);
+  }
+}
+
+/* Ensure content container has relative positioning for animations */
+#content {
+  position: relative;
+  min-height: 400px; /* Adjust based on your content */
+}
+
+/* Animation container for page transitions */
+.animation-container {
+  position: relative;
+  width: 100%;
+}
+
+/* Input validation styles */
+.form-input.valid {
+  border-color: #2ed573;
+}
+
+.form-input.invalid {
+  border-color: #ff4757;
+}
+
+/* Smooth transition for border color */
+.form-input {
+  transition: border-color 0.3s ease;
+}
+
+/* Custom focus styles for better accessibility */
+.form-input:focus {
+  border-color: #63b3ed;
+  box-shadow: 0 0 0 2px rgba(99, 179, 237, 0.3);
+}
+
+.form-checkbox:focus {
+  box-shadow: 0 0 0 2px rgba(99, 179, 237, 0.3);
 }
