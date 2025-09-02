@@ -294,17 +294,17 @@ function displayEnemiesForPhase(container, phase) {
 
                 formGroup.appendChild(label);
                 formGroup.appendChild(inputField);
+
+                // Add input validation - MAKE SURE TO PASS THE ENEMY PARAMETER
+                setupInputValidation(inputField, input.min, input.max, input.default, enemy);
             }
 
             // Add input validation for number inputs
             if (input.type === 'number') {
                 inputField.addEventListener('input', function () {
                     // Debounced validation and calculation
-                    debouncedValidation(this, input.min, input.max, enemy);
+                    debouncedValidation(this, input.min, input.max, enemy, input.default);
                 });
-
-                // Add real-time validation
-                setupInputValidation(inputField, input.min, input.max, enemy);
             } else if (input.type === 'checkbox') {
                 inputField.addEventListener('change', function () {
                     calculateATK(enemy);

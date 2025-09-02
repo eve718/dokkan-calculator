@@ -41,6 +41,12 @@ const debouncedValidation = debounce(validateInputWithDebounce, 500);
 
 // Calculate ATK based on enemy formula
 function calculateATK(enemy) {
+    // Check if enemy is defined
+    if (!enemy) {
+        console.error('Enemy is undefined in calculateATK');
+        return;
+    }
+
     // Collect input values
     const inputs = {};
     let allInputsFound = true;
@@ -108,6 +114,12 @@ function calculateATK(enemy) {
 function calculateATKWithRetry(enemy, retryCount = 0) {
     const maxRetries = 5;
 
+    // Check if enemy is defined
+    if (!enemy) {
+        console.error('Enemy is undefined in calculateATKWithRetry');
+        return;
+    }
+
     // Check if all input fields exist
     const allInputsExist = enemy.inputs.every(input => {
         return document.getElementById(`${enemy.id}_${input.id}`);
@@ -124,6 +136,12 @@ function calculateATKWithRetry(enemy, retryCount = 0) {
 
 // Real-time input validation with instant updates
 function setupInputValidation(inputField, min, max, defaultValue, enemy) {
+    // Check if enemy is defined
+    if (!enemy) {
+        console.error('Enemy is undefined in setupInputValidation');
+        return;
+    }
+
     let validationTimeout = null;
 
     inputField.addEventListener('input', function () {
@@ -173,6 +191,12 @@ function setupInputValidation(inputField, min, max, defaultValue, enemy) {
 
 // Function to validate and correct input
 function validateAndCorrectInput(inputElement, min, max, defaultValue, enemy) {
+    // Check if enemy is defined
+    if (!enemy) {
+        console.error('Enemy is undefined in validateAndCorrectInput');
+        return;
+    }
+
     let value = inputElement.value.trim();
 
     // If empty, use default value
