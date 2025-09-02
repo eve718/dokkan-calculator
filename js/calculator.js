@@ -17,16 +17,19 @@ function debounce(func, wait) {
 }
 
 // Enhanced input validation function
-function validateInputWithDebounce(inputElement, min, max, enemy) {
+function validateInputWithDebounce(inputElement, min, max, enemy, defaultValue) {
     let value = parseFloat(inputElement.value);
 
-    // If not a number, set to minimum
+    // If not a number, clear the field
     if (isNaN(value)) {
-        inputElement.value = min;
+        inputElement.value = '';
     } else if (value < min) {
-        inputElement.value = min;
+        inputElement.value = min === defaultValue ? '' : min;
     } else if (value > max) {
-        inputElement.value = max;
+        inputElement.value = max === defaultValue ? '' : max;
+    } else if (value === defaultValue) {
+        // If value equals default, keep it as is (user explicitly entered default)
+        inputElement.value = value;
     }
 
     // Recalculate ATK after validation
@@ -120,7 +123,7 @@ function calculateATKWithRetry(enemy, retryCount = 0) {
 }
 
 // Real-time input validation with instant updates
-function setupInputValidation(inputField, min, max, enemy) {
+function setupInputValidation(inputField, min, max, defaultValue, enemy) {
     let validationTimeout = null;
 
     inputField.addEventListener('input', function () {
@@ -144,6 +147,12 @@ function setupInputValidation(inputField, min, max, enemy) {
         if (!isNaN(numValue) && numValue >= min && numValue <= max) {
             // Valid value - update immediately
             this.style.borderColor = '';
+
+            // If value equals default, keep it as is (user explicitly entered default)
+            if (numValue === defaultValue) {
+                this.value = numValue;
+            }
+
             calculateATK(enemy);
         } else {
             // Invalid value - show visual feedback
@@ -151,19 +160,19 @@ function setupInputValidation(inputField, min, max, enemy) {
 
             // Schedule validation after user stops typing
             validationTimeout = setTimeout(() => {
-                validateAndCorrectInput(this, min, max, enemy);
+                validateAndCorrectInput(this, min, max, defaultValue, enemy);
             }, 800); // Adjust this delay as needed
         }
     });
 
     // Also validate when user leaves the field
     inputField.addEventListener('blur', function () {
-        validateAndCorrectInput(this, min, max, enemy);
+        validateAndCorrectInput(this, min, max, defaultValue, enemy);
     });
 }
 
 // Function to validate and correct input
-function validateAndCorrectInput(inputElement, min, max, enemy) {
+function validateAndCorrectInput(inputElement, min, max, defaultValue, enemy) {
     let value = inputElement.value.trim();
 
     // If empty, use default value
@@ -175,13 +184,16 @@ function validateAndCorrectInput(inputElement, min, max, enemy) {
 
     value = parseFloat(value);
 
-    // If not a number, set to minimum
+    // If not a number, clear the field (will use default)
     if (isNaN(value)) {
-        inputElement.value = min;
+        inputElement.value = '';
     } else if (value < min) {
-        inputElement.value = min;
+        inputElement.value = min === defaultValue ? '' : min;
     } else if (value > max) {
-        inputElement.value = max;
+        inputElement.value = max === defaultValue ? '' : max;
+    } else if (value === defaultValue) {
+        // If value equals default, keep it as is (user explicitly entered default)
+        inputElement.value = value;
     }
 
     // Remove error styling and recalculate
