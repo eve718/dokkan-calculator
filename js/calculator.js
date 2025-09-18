@@ -39,6 +39,15 @@ function validateInputWithDebounce(inputElement, min, max, enemy, defaultValue) 
 // Create a debounced version of the validation
 const debouncedValidation = debounce(validateInputWithDebounce, 500);
 
+// Function to calculate ATK based on enemy ID and inputs
+function calculateEnemyATK(enemyId, inputs) {
+    if (formulaFunctions[enemyId])
+        return formulaFunctions[enemyId](inputs);
+
+    console.log(`Formula not found for Enemy ${enemyId}`);
+    return {}; // Return empty object if formula not found
+}
+
 // Calculate ATK based on enemy formula
 function calculateATK(enemy) {
     // Check if enemy is defined
@@ -47,91 +56,111 @@ function calculateATK(enemy) {
         return;
     }
 
-    // Collect input values
-    const inputs = {};
-    let allInputsFound = true;
+    // For enemies without inputs, use empty inputs object
+    let inputs = {};
 
-    enemy.inputs.forEach(input => {
-        const inputField = document.getElementById(`${enemy.id}_${input.id}`);
+    // Only process inputs if the enemy has them
+    if (enemy.inputs && enemy.inputs.length > 0) {
+        let allInputsFound = true;
 
-        // Skip if input field doesn't exist yet
-        if (!inputField) {
-            console.warn(`Input field ${enemy.id}_${input.id} not found`);
-            // Use the default value from the input definition
-            inputs[input.id] = input.default || 0;
-            allInputsFound = false;
+        enemy.inputs.forEach(input => {
+            const inputField = document.getElementById(`${enemy.id}_${input.id}`);
+
+            // Skip if input field doesn't exist yet
+            if (!inputField) {
+                // Use the default value from the input definition
+                inputs[input.id] = input.default || 0;
+                allInputsFound = false;
+                return;
+            }
+
+            if (input.type === 'checkbox') {
+                inputs[input.id] = inputField.checked;
+            } else {
+                // Use the default value if input is empty, otherwise use the input value
+                const value = inputField.value.trim();
+                inputs[input.id] = value === '' ?
+                    (input.default || 0) :
+                    parseFloat(value) || 0;
+            }
+        });
+
+        // If not all inputs were found, try again after a short delay
+        if (!allInputsFound) {
+            setTimeout(() => calculateATK(enemy), 100);
             return;
         }
-
-        if (input.type === 'checkbox') {
-            inputs[input.id] = inputField.checked;
-        } else {
-            // Use the default value if input is empty, otherwise use the input value
-            const value = inputField.value.trim();
-            inputs[input.id] = value === '' ?
-                (input.default || 0) :
-                parseFloat(value) || 0;
-        }
-    });
-
-    // If not all inputs were found, try again after a short delay
-    if (!allInputsFound) {
-        setTimeout(() => calculateATK(enemy), 50);
-        return;
     }
 
     // Calculate using the formula function
     const results = calculateEnemyATK(enemy.formula, inputs);
 
     // Display all results
-    enemy.outputs.forEach(output => {
-        const resultDiv = document.getElementById(`${enemy.id}_${output.id}`);
-        if (resultDiv) {
-            // Check if we should show this result based on condition
-            let shouldShow = true;
-            if (output.condition) {
-                // Simple condition evaluation
-                try {
-                    shouldShow = new Function('inputs', `return ${output.condition}`)(inputs);
-                } catch (e) {
-                    console.error("Error evaluating condition:", e);
-                    shouldShow = false;
-                }
-            }
+    if (enemy.outputs) {
+        enemy.outputs.forEach(output => {
+            const resultDiv = document.getElementById(`${enemy.id}_${output.id}`);
 
-            if (shouldShow && results[output.id] !== undefined) {
-                resultDiv.style.display = 'block';
-                // Format the number with dots as thousands separators
-                resultDiv.textContent = `${output.label}: ${formatNumber(Math.round(results[output.id]))}`;
+            if (resultDiv) {
+                // Check if we should show this result based on condition
+                let shouldShow = true;
+                if (output.condition) {
+                    // Simple condition evaluation
+                    try {
+                        shouldShow = new Function('inputs', `return ${output.condition}`)(inputs);
+                    } catch (e) {
+                        console.error("Error evaluating condition:", e);
+                        shouldShow = false;
+                    }
+                }
+
+                if (shouldShow && results[output.id] !== undefined) {
+                    resultDiv.style.display = 'block';
+                    // Format the number with dots as thousands separators
+                    resultDiv.textContent = `${output.label}: ${formatNumber(Math.round(results[output.id]))}`;
+                } else {
+                    resultDiv.style.display = 'none';
+                }
             } else {
-                resultDiv.style.display = 'none';
+                // Create the result div if it doesn't exist
+                createMissingResultDiv(enemy, output, results[output.id]);
             }
-        }
-    });
+        });
+    }
 }
 
-// Function to calculate ATK with retry for missing inputs
-function calculateATKWithRetry(enemy, retryCount = 0) {
-    const maxRetries = 5;
+// Function to create missing result divs
+function createMissingResultDiv(enemy, output, value) {
+    // Find the results container for this enemy
+    const enemyForm = document.getElementById(`enemy-${enemy.id}`);
 
-    // Check if enemy is defined
-    if (!enemy) {
-        console.error('Enemy is undefined in calculateATKWithRetry');
+    if (!enemyForm) {
+        // Try again after a short delay
+        setTimeout(() => createMissingResultDiv(enemy, output, value), 100);
         return;
     }
 
-    // Check if all input fields exist
-    const allInputsExist = enemy.inputs.every(input => {
-        return document.getElementById(`${enemy.id}_${input.id}`);
-    });
+    const resultsContainer = enemyForm.querySelector('.results-container');
 
-    if (!allInputsExist && retryCount < maxRetries) {
-        setTimeout(() => calculateATKWithRetry(enemy, retryCount + 1), 100);
+    if (!resultsContainer) {
         return;
     }
 
-    // If we have all inputs or reached max retries, proceed with calculation
-    calculateATK(enemy);
+    // Check if the result div already exists
+    const existingResultDiv = document.getElementById(`${enemy.id}_${output.id}`);
+    if (existingResultDiv) {
+        // Update the existing div instead of creating a new one
+        existingResultDiv.textContent = `${output.label}: ${formatNumber(Math.round(value))}`;
+        return;
+    }
+
+    // Create the result div
+    const resultDiv = document.createElement('div');
+    resultDiv.id = `${enemy.id}_${output.id}`;
+    resultDiv.className = 'result';
+    resultDiv.textContent = `${output.label}: ${formatNumber(Math.round(value))}`;
+
+    // Add to results container
+    resultsContainer.appendChild(resultDiv);
 }
 
 // Real-time input validation with instant updates
@@ -179,7 +208,7 @@ function setupInputValidation(inputField, min, max, defaultValue, enemy) {
             // Schedule validation after user stops typing
             validationTimeout = setTimeout(() => {
                 validateAndCorrectInput(this, min, max, defaultValue, enemy);
-            }, 800); // Adjust this delay as needed
+            }, 800);
         }
     });
 

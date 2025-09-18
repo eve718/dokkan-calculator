@@ -238,6 +238,7 @@ function displayEnemiesForPhase(container, phase) {
     phase.enemies.forEach(enemy => {
         const enemyForm = document.createElement('div');
         enemyForm.className = 'enemy-form';
+        enemyForm.id = `enemy-${enemy.id}`;
         enemyForm.innerHTML = `
             <h4>${enemy.name}</h4>
             <img src="${enemy.image}" alt="${enemy.name}" class="enemy-image">
@@ -245,136 +246,97 @@ function displayEnemiesForPhase(container, phase) {
 
         const form = document.createElement('div');
 
-        enemy.inputs.forEach(input => {
-            const formGroup = document.createElement('div');
-            formGroup.className = 'form-group';
+        // Only create input fields if the enemy has inputs
+        if (enemy.inputs && enemy.inputs.length > 0) {
+            enemy.inputs.forEach(input => {
+                const formGroup = document.createElement('div');
+                formGroup.className = 'form-group';
 
-            const label = document.createElement('label');
-            label.textContent = input.label;
-            label.setAttribute('for', input.id);
+                const label = document.createElement('label');
+                label.textContent = input.label;
+                label.setAttribute('for', input.id);
 
-            let inputField;
-            if (input.type === 'checkbox') {
-                const checkboxContainer = document.createElement('div');
-                checkboxContainer.className = 'checkbox-container';
+                let inputField;
+                if (input.type === 'checkbox') {
+                    const checkboxContainer = document.createElement('div');
+                    checkboxContainer.className = 'checkbox-container';
 
-                // Create a span (not a label) for the text above the checkbox
-                const textSpan = document.createElement('span');
-                textSpan.textContent = input.label;
-                textSpan.className = 'checkbox-text';
+                    // Create a span (not a label) for the text above the checkbox
+                    const textSpan = document.createElement('span');
+                    textSpan.textContent = input.label;
+                    textSpan.className = 'checkbox-text';
 
-                // Create the checkbox input
-                inputField = document.createElement('input');
-                inputField.type = 'checkbox';
-                inputField.id = `${enemy.id}_${input.id}`;
-                inputField.checked = input.default || false;
-                inputField.className = 'form-checkbox';
+                    // Create the checkbox input
+                    inputField = document.createElement('input');
+                    inputField.type = 'checkbox';
+                    inputField.id = `${enemy.id}_${input.id}`;
+                    inputField.checked = input.default || false;
+                    inputField.className = 'form-checkbox';
 
 
-                // Add event listener
-                inputField.addEventListener('change', function () {
-                    calculateATK(enemy);
-                });
+                    // Add event listener
+                    inputField.addEventListener('change', function () {
+                        calculateATK(enemy);
+                    });
 
-                // Add elements to container in order (text first, then checkbox)
-                checkboxContainer.appendChild(textSpan);
-                checkboxContainer.appendChild(inputField);
+                    // Add elements to container in order (text first, then checkbox)
+                    checkboxContainer.appendChild(textSpan);
+                    checkboxContainer.appendChild(inputField);
 
-                // Add the complete checkbox container to the form group
-                formGroup.appendChild(checkboxContainer);
-            } else {
-                inputField = document.createElement('input');
-                inputField.type = input.type;
-                inputField.id = `${enemy.id}_${input.id}`;
-                inputField.min = input.min || 0;
-                inputField.max = input.max || 100;
-                inputField.placeholder = input.default || 0; // Set placeholder to default value
-                inputField.value = ''; // Start with empty value
-                inputField.className = 'form-input';
+                    // Add the complete checkbox container to the form group
+                    formGroup.appendChild(checkboxContainer);
+                } else {
+                    inputField = document.createElement('input');
+                    inputField.type = input.type;
+                    inputField.id = `${enemy.id}_${input.id}`;
+                    inputField.min = input.min || 0;
+                    inputField.max = input.max || 100;
+                    inputField.placeholder = input.default || 0;
+                    inputField.value = '';
+                    inputField.className = 'form-input';
 
-                formGroup.appendChild(label);
-                formGroup.appendChild(inputField);
+                    formGroup.appendChild(label);
+                    formGroup.appendChild(inputField);
 
-                // Add input validation - MAKE SURE TO PASS THE ENEMY PARAMETER
-                setupInputValidation(inputField, input.min, input.max, input.default, enemy);
-            }
+                    // Add input validation
+                    setupInputValidation(inputField, input.min, input.max, input.default, enemy);
+                }
 
-            // Add input validation for number inputs
-            if (input.type === 'number') {
-                inputField.addEventListener('input', function () {
-                    // Debounced validation and calculation
-                    debouncedValidation(this, input.min, input.max, enemy, input.default);
-                });
-            } else if (input.type === 'checkbox') {
-                inputField.addEventListener('change', function () {
-                    calculateATK(enemy);
-                });
-            }
-
-            form.appendChild(formGroup);
-        });
+                form.appendChild(formGroup);
+            });
+        } else {
+            // For enemies without inputs, add a message or leave empty
+            const noInputsMessage = document.createElement('p');
+            noInputsMessage.textContent = 'This enemy has static ATK values';
+            noInputsMessage.style.textAlign = 'center';
+            noInputsMessage.style.color = '#a0aec0';
+            noInputsMessage.style.fontStyle = 'italic';
+            form.appendChild(noInputsMessage);
+        }
 
         // Create result containers for all outputs
         const resultsContainer = document.createElement('div');
         resultsContainer.className = 'results-container';
 
-        enemy.outputs.forEach(output => {
-            const resultDiv = document.createElement('div');
-            resultDiv.id = `${enemy.id}_${output.id}`;
-            resultDiv.className = 'result';
-            resultDiv.textContent = `${output.label}: 0`;
-            resultsContainer.appendChild(resultDiv);
-        });
+        if (enemy.outputs) {
+            enemy.outputs.forEach(output => {
+                const resultDiv = document.createElement('div');
+                resultDiv.id = `${enemy.id}_${output.id}`;
+                resultDiv.className = 'result';
+                resultDiv.textContent = `${output.label}: 0`;
+                resultsContainer.appendChild(resultDiv);
+            });
+        }
 
         enemyForm.appendChild(form);
         enemyForm.appendChild(resultsContainer);
         container.appendChild(enemyForm);
-
-        // After creating all enemy forms, calculate initial ATK
-        setTimeout(() => {
-            phase.enemies.forEach(enemy => {
-                calculateATKWithRetry(enemy);
-            });
-        }, 100);
     });
-}
 
-// Initialize all calculations with default values
-function initializeAllCalculations() {
-    // This will be called after all enemies are loaded
-    const event = gameData.events.find(e => e.id === currentEventId);
-    if (!event) return;
-
-    const stage = event.stages.find(s => s.id === currentStageId);
-    if (!stage) return;
-
-    // Get the current phase (first phase by default)
-    const phase = stage.phases[0];
-    if (!phase) return;
-
-    // Calculate ATK for each enemy in the phase
-    phase.enemies.forEach(enemy => {
-        calculateATK(enemy);
-    });
-}
-
-// Function to validate input range
-function validateInputRange(inputElement, min, max) {
-    let value = inputElement.value.trim();
-
-    // If empty, keep it empty (will use placeholder value)
-    if (value === '') {
-        return;
-    }
-
-    value = parseFloat(value);
-
-    // If not a number, set to minimum
-    if (isNaN(value)) {
-        inputElement.value = min;
-    } else if (value < min) {
-        inputElement.value = min;
-    } else if (value > max) {
-        inputElement.value = max;
-    }
+    // Calculate ATK for all enemies after they're fully rendered
+    setTimeout(() => {
+        phase.enemies.forEach(enemy => {
+            calculateATK(enemy);
+        });
+    }, 300);
 }
