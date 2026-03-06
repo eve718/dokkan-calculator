@@ -4,7 +4,7 @@
   "description": "Dokkan Battle ATK Calculator",
   "scripts": {
     "preobfuscate": "echo 'Make sure original files exist locally'",
-    "obfuscate": "javascript-obfuscator js/data.js --output js/data-obfuscated.js && javascript-obfuscator js/formulas.js --output js/formulas-obfuscated.js",
+    "obfuscate": "javascript-obfuscator js/data.js --output dist/data-obfuscated.js && javascript-obfuscator js/formulas.js --output dist/formulas-obfuscated.js",
     "postobfuscate": "echo 'Obfuscation complete'",
     "precommit": "npm run obfuscate",
     "netlify-build": "echo 'Using pre-obfuscated files - no build needed'"

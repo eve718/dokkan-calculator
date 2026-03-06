@@ -1,50 +1,209 @@
-/* Responsive adjustments */
+/* =====================================================
+   RESPONSIVE STYLES — mobile-first
+   Breakpoints: 480 | 576 | 768 | 992 | 1200
+   ===================================================== */
+
+/* --- 1200px (large desktop cap) --- */
 @media (max-width: 1200px) {
   .container {
     padding: 15px;
   }
 }
 
+/* --- 992px (tablet landscape) --- */
 @media (max-width: 992px) {
   .card-grid {
     grid-template-columns: repeat(auto-fill, minmax(250px, 1fr));
   }
+
+  #enemy-forms-container .enemy-form {
+    flex-basis: 260px;
+  }
 }
 
+/* --- 768px (tablet portrait) --- */
 @media (max-width: 768px) {
-  .card-grid {
-    grid-template-columns: 1fr;
+  header {
+    padding: 1.75rem 1rem;
+    margin-bottom: 2rem;
   }
 
   header h1 {
-    font-size: 1.5rem;
+    font-size: 1.35rem;
+  }
+
+  .header-tagline {
+    font-size: 0.85rem;
+  }
+
+  .card-grid {
+    grid-template-columns: repeat(auto-fill, minmax(220px, 1fr));
+    gap: 14px;
+  }
+
+  #enemy-forms-container {
+    gap: 15px;
+  }
+
+  #enemy-forms-container .enemy-form {
+    flex-basis: 240px;
   }
 
   .enemy-image {
-    max-width: 250px;
+    max-width: 240px;
   }
 
   .enemy-form-container {
     grid-template-columns: 1fr;
   }
+
+  .phase-select-container {
+    max-width: 100%;
+  }
+
+  .phase-select-container select {
+    width: 100%;
+    max-width: 100%;
+  }
+
+  .result {
+    max-width: 100%;
+    width: 100%;
+  }
+
+  .breadcrumb {
+    font-size: 0.85rem;
+    padding: 10px 14px;
+  }
 }
 
+/* --- 576px (large phones) --- */
 @media (max-width: 576px) {
   .container {
-    padding: 10px;
+    padding: 12px;
+  }
+
+  header {
+    padding: 1.4rem 1rem;
+    margin-bottom: 1.5rem;
+  }
+
+  header h1 {
+    font-size: 1.2rem;
+  }
+
+  .header-tagline {
+    display: none; /* too cramped on small phones */
+  }
+
+  .card-grid {
+    grid-template-columns: 1fr;
+    gap: 12px;
   }
 
   .card {
-    min-height: 150px;
+    min-height: 140px;
     padding: 15px;
   }
 
+  #enemy-forms-container {
+    gap: 14px;
+    padding: 0 8px;
+  }
+
+  #enemy-forms-container .enemy-form {
+    flex: 1 1 100%;
+    max-width: 100%;
+  }
+
   .enemy-form {
-    padding: 15px;
+    padding: 18px 14px;
+    max-width: 100%;
   }
 
   .back-button {
     width: 100%;
     text-align: center;
+    padding: 12px;
+  }
+
+  .breadcrumb {
+    display: block;
+    width: 100%;
+    font-size: 0.82rem;
+  }
+
+  h2 {
+    font-size: 1.35rem;
+  }
+
+  .results-container {
+    padding: 14px;
+  }
+}
+
+/* --- 480px (compact phones) --- */
+@media (max-width: 480px) {
+  header h1 {
+    font-size: 1.08rem;
+    letter-spacing: 0;
+  }
+
+  .card {
+    border-radius: 8px;
+  }
+
+  .enemy-image-container {
+    width: 100px;
+    height: 100px;
+  }
+
+  .form-group {
+    padding: 12px 10px;
+  }
+
+  .form-group input[type="number"] {
+    width: 100%;
+    max-width: 100%;
+  }
+
+  .phase-select-container {
+    padding: 14px 12px;
+  }
+
+  footer {
+    padding: 1.8rem 1rem;
+    margin-top: 2.5rem;
+  }
+}
+
+/* =====================================================
+   REDUCED MOTION PREFERENCE
+   ===================================================== */
+@media (prefers-reduced-motion: reduce) {
+  *,
+  *::before,
+  *::after {
+    animation-duration: 0.01ms !important;
+    animation-iteration-count: 1 !important;
+    transition-duration: 0.01ms !important;
+    scroll-behavior: auto !important;
+  }
+}
+
+/* =====================================================
+   PRINT STYLES
+   ===================================================== */
+@media print {
+  header, footer, .back-button, .breadcrumb, nav {
+    display: none;
+  }
+  body {
+    background: #fff;
+    color: #000;
+  }
+  .result {
+    border: 1px solid #000;
+    box-shadow: none;
   }
 }
