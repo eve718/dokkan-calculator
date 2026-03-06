@@ -2,17 +2,24 @@
 js/data.js
 js/formulas.js
 
-# But DO include the obfuscated versions
-#!js/data-obfuscated.js
-#!js/formulas-obfuscated.js
-
-# Node modules
+# Node modules and temp
 node_modules/
-
-# Environment variables
+.venv/
 .env
+*.log
 
-# OS files
+# OS and IDE
+.DS_Store
+Thumbs.db
+.env.local
+
+# Temporary build artifacts
+*.tmp
+.cache/
+
+# Keep tracked files
+!.gitkeep
+!.github/copilot-instructions.md
 .DS_Store
 Thumbs.db
 
