@@ -119,8 +119,9 @@
     <!-- Global configuration must load first -->
     <script src="js/config.js"></script>
     <!-- Data and formulas must load before navigation/calculator -->
-    <script src="js/data.js"></script>
-    <script src="js/formulas.js"></script>
+    <!-- Use obfuscated production bundles when available -->
+    <script src="dist/data-obfuscated.js"></script>
+    <script src="dist/formulas-obfuscated.js"></script>
     <!-- UI and calculation logic -->
     <script src="js/navigation.js"></script>
     <script src="js/calculator.js"></script>
