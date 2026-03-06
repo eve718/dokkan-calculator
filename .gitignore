@@ -17,6 +17,9 @@ Thumbs.db
 *.tmp
 .cache/
 
+# Generated entry wizard output
+scripts/output/
+
 # Keep tracked files
 !.gitkeep
 !.github/copilot-instructions.md
