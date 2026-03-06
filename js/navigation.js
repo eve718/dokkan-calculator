@@ -269,6 +269,18 @@ function showEventsPage(container) {
     });
 
     container.appendChild(grid);
+
+    // Add about section
+    const aboutSection = document.createElement('section');
+    aboutSection.className = 'seo-about';
+    aboutSection.setAttribute('aria-label', 'About this calculator');
+    aboutSection.innerHTML = `
+        <h2>About the Dokkan Battle Boss ATK Calculator</h2>
+        <p>This free tool calculates enemy boss ATK stats in Dokkan Battle events. Select an event, choose a stage and battle, pick an enemy, and enter the relevant inputs. The calculator instantly shows the enemy's normal attack ATK, AOE ATK (if applicable), and super attack ATK with modifiers like critical hits and DEF ignore mechanics.</p>
+        <p>Each enemy has a base ATK stat and various inputs that affect the final ATK calculation. Depending on the enemy, inputs might include buffs, specific phase conditions, enemy-specific multipliers, or other mechanics that modify the ATK value.</p>
+        <p>Use it to understand enemy ATK values across different phases and conditions, compare ATK stats under various scenarios, or plan your team strategy for difficult events.</p>
+    `;
+    container.appendChild(aboutSection);
 }
 
 /**
@@ -404,6 +416,14 @@ function showEnemiesPage(container, eventId, stageId, battleId) {
         }
     });
     container.appendChild(backButton);
+
+    // Add notice about using with Damage Calculator
+    const noticeBox = document.createElement('div');
+    noticeBox.className = 'notice-box';
+    const noticeText = document.createElement('p');
+    noticeText.innerHTML = '<strong>Tip:</strong> Use these ATK values with the <a href="https://dokkan-damage-calculator.netlify.app/" target="_blank" rel="noopener noreferrer">Dokkan Damage Calculator</a> to compute damage received.';
+    noticeBox.appendChild(noticeText);
+    container.appendChild(noticeBox);
 
     // Create phase selection dropdown only if there's more than one phase
     const enemyFormsContainer = document.createElement('div');
