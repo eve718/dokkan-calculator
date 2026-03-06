@@ -261,6 +261,9 @@ function showEventsPage(container) {
             img.className = 'event-image';
             img.loading = 'lazy';
             img.decoding = 'async';
+            // Explicit dimensions prevent CLS (browser reserves space before image loads)
+            img.width = 300;
+            img.height = 220;
             card.appendChild(img);
         }
         
