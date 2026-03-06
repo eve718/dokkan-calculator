@@ -10,6 +10,7 @@
     "netlify-build": "echo 'Using pre-obfuscated files - no build needed'"
   },
   "devDependencies": {
-    "javascript-obfuscator": "^4.0.0"
+    "javascript-obfuscator": "^4.0.0",
+    "jimp": "^1.6.0"
   }
 }

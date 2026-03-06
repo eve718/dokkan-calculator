@@ -968,6 +968,28 @@ footer::before {
   height: 1px;
   background: linear-gradient(90deg, transparent, rgba(99, 179, 237, 0.4), transparent);
 }
+/* SEO about section */
+.seo-about {
+  margin-top: 3rem;
+  padding: 1.75rem 2rem;
+  background: rgba(255, 255, 255, 0.03);
+  border: 1px solid rgba(255, 255, 255, 0.07);
+  border-radius: 12px;
+  color: #a0aec0;
+}
+.seo-about h2 {
+  font-size: 1.1rem;
+  font-weight: 600;
+  color: #cbd5e0;
+  margin-bottom: 0.85rem;
+}
+.seo-about p {
+  font-size: 0.9rem;
+  line-height: 1.7;
+  margin-bottom: 0.65rem;
+}
+.seo-about p:last-child { margin-bottom: 0; }
+
 .footer-disclaimer {
   font-size: 0.82rem;
   color: #718096;
