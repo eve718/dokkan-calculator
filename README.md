@@ -1,16 +1,16 @@
 # Dokkan Battle Boss ATK Calculator
 
-A free, accurate calculator for Dokkan Battle enemy/boss ATK damage. Select an event, stage, and enemy, then enter the relevant inputs to instantly calculate the boss's normal attack, AOE, and super attack damage across different phases and conditions.
+A free, accurate calculator for Dokkan Battle enemy/boss ATK stats. Select an event, stage, and enemy, then enter the relevant inputs to instantly calculate the boss's normal attack, AOE, and super attack ATK values across different phases and conditions.
 
 **Live:** https://dokkan-battle-atk-calculator.netlify.app/
 
 ## Features
 
-- **Accurate damage calculations** for all supported Dokkan Battle events and enemies
-- **Comprehensive attack breakdowns** showing normal attacks, AOEs, and super attacks
-- **In-depth condition modifiers** including DEF values, critical hits, and DEF ignore mechanics
+- **Accurate ATK calculations** for all supported Dokkan Battle events and enemies
+- **Comprehensive attack breakdowns** showing normal attack, AOE, and super attack ATK stats
+- **In-depth condition modifiers** including phase conditions, buffs, and enemy-specific mechanics
 - **Real-time results** as you adjust inputs
-- **Event-specific formulas** for accurate calculations across all phases
+- **Event-specific formulas** for accurate ATK calculations across all phases
 - **Responsive design** that works on mobile and desktop
 
 ## Quick Start
@@ -19,8 +19,8 @@ A free, accurate calculator for Dokkan Battle enemy/boss ATK damage. Select an e
 2. **Choose an event** from the grid
 3. **Select a stage** and battle
 4. **Pick an enemy** and review its inputs
-5. **Enter the relevant values** (your DEF, presence of buffs, phase conditions, etc.)
-6. **See instant results** for all attack outputs (normal, AOE, super with crit/DEF ignore)
+5. **Enter the relevant values** (buffs, phase conditions, enemy-specific multipliers, etc.)
+6. **See instant results** for all ATK outputs (normal, AOE, super with crit/DEF ignore)
 
 ## Development
 
