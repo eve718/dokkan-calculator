@@ -1,20 +1,29 @@
 #!/usr/bin/env node
 /**
- * Dokkan Calculator – New Entry Wizard
+ * Dokkan Calculator – New Entry Wizard  (v2)
  *
- * Interactively collects data for a new event/stage and generates:
- *   - A ready-to-paste data.js entry block
- *   - A ready-to-fill formula stub for formulas.js
+ * Generates ready-to-paste data.js and formulas.js snippets for a new event entry.
  *
- * Output is saved to scripts/output/entry-<eventId>-stage<N>.txt
+ * Features:
+ *   - Battle-level entries (multi-battle stages supported)
+ *   - Full go-back / redo history at every section boundary
  *
- * Usage:
- *   npm run new-entry
+ * At every section confirmation prompt:
+ *   [Enter]  Continue to next section
+ *   [r]      Redo the current section from scratch
+ *   [b]      Go back to the previous section
+ *
+ * Output: scripts/output/entry-<eventId>-stage<N>.txt
+ * Usage:  npm run new-entry
  */
+
+'use strict';
 
 const readline = require('readline');
 const path     = require('path');
 const fs       = require('fs');
+
+const GO_BACK = Symbol('GO_BACK');
 
 // ─── readline helpers ─────────────────────────────────────────────────────────
 
@@ -22,49 +31,54 @@ const rl = readline.createInterface({ input: process.stdin, output: process.stdo
 
 function ask(question, defaultVal) {
     return new Promise(resolve => {
-        const suffix = defaultVal !== undefined ? ` [${defaultVal}]` : '';
-        rl.question(`${question}${suffix}: `, ans => {
-            const t = ans.trim();
-            resolve(t !== '' ? t : (defaultVal !== undefined ? String(defaultVal) : ''));
+        const hint = defaultVal !== undefined ? ` [${defaultVal}]` : '';
+        rl.question(`${question}${hint}: `, ans => {
+            resolve(ans.trim() || (defaultVal !== undefined ? String(defaultVal) : ''));
         });
     });
 }
 
 async function askInt(question, defaultVal, min, max) {
-    while (true) {
-        const raw = await ask(question, defaultVal);
-        const n = parseInt(raw, 10);
-        const okMin = min === undefined || n >= min;
-        const okMax = max === undefined || n <= max;
-        if (!isNaN(n) && okMin && okMax) return n;
-        const range = [min !== undefined ? `>= ${min}` : '', max !== undefined ? `<= ${max}` : ''].filter(Boolean).join(' and ');
-        console.log(`  ⚠  Please enter a whole number${range ? ' ' + range : ''}.`);
+    for (;;) {
+        const n = parseInt(await ask(question, defaultVal), 10);
+        if (!isNaN(n) && (min === undefined || n >= min) && (max === undefined || n <= max)) return n;
+        const hint = [min != null && `>= ${min}`, max != null && `<= ${max}`].filter(Boolean).join(', ');
+        console.log(`  ⚠  Whole number required${hint ? ` (${hint})` : ''}.`);
     }
 }
 
 async function pickOne(title, options) {
     console.log(`\n  ${title}`);
     options.forEach((o, i) => console.log(`    ${i + 1}. ${o.label}`));
-    while (true) {
-        const raw = await ask('  Choice');
-        const n = parseInt(raw, 10);
+    for (;;) {
+        const n = parseInt(await ask('  Choice'), 10);
         if (!isNaN(n) && n >= 1 && n <= options.length) return options[n - 1];
-        console.log('  ⚠  Invalid — enter a number from the list.');
+        console.log('  ⚠  Enter a number from the list.');
     }
 }
 
 async function pickMany(title, options) {
     console.log(`\n  ${title}`);
-    console.log('  (Enter numbers separated by spaces, e.g. "1 3 5")');
+    console.log('  (space-separated numbers, e.g.  1 3 5)');
     options.forEach((o, i) => console.log(`    ${i + 1}. ${o.label}`));
-    while (true) {
-        const raw = await ask('  Choices');
-        const nums = raw.split(/\s+/).map(s => parseInt(s, 10)).filter(n => !isNaN(n));
-        if (nums.length > 0 && nums.every(n => n >= 1 && n <= options.length)) {
-            return nums.map(n => options[n - 1]);
-        }
-        console.log('  ⚠  Invalid — enter space-separated numbers from the list.');
+    for (;;) {
+        const nums = (await ask('  Choices')).split(/\s+/).map(Number).filter(n => !isNaN(n));
+        if (nums.length && nums.every(n => n >= 1 && n <= options.length)) return nums.map(n => options[n - 1]);
+        console.log('  ⚠  Enter space-separated numbers from the list.');
     }
+}
+
+/**
+ * After a section is collected, show a summary and prompt for navigation.
+ * Returns 'ok' | 'redo' | 'back'
+ */
+async function navPrompt(summary) {
+    console.log(`\n  ✓  ${summary}`);
+    console.log('  [Enter] Continue   [r] Redo this section   [b] Back');
+    const ans = (await ask('  >', '')).toLowerCase();
+    if (ans.startsWith('b')) return 'back';
+    if (ans.startsWith('r')) return 'redo';
+    return 'ok';
 }
 
 // ─── constants ────────────────────────────────────────────────────────────────
@@ -126,7 +140,7 @@ const INPUT_PRESETS = [
         }
     },
     {
-        label: 'Custom checkbox input',
+        label: 'Custom checkbox',
         build: async () => {
             const id    = await ask('  Input ID (underscores, no spaces)');
             const label = await ask('  Label text');
@@ -136,86 +150,234 @@ const INPUT_PRESETS = [
     },
 ];
 
-const OUTPUT_OPTIONS = [
-    { label: 'Normal ATK',                 id: 'normal_atk',  defaultLabel: 'Normal ATK' },
-    { label: 'Normal ATK after supering',  id: 'normal_atk2', defaultLabel: 'Normal ATK after supering' },
-    { label: 'AOE ATK 2+',                 id: 'aoe_atk',     defaultLabel: 'AOE ATK 2+' },
-    { label: 'AOE ATK 2+ after supering',  id: 'aoe_atk2',    defaultLabel: 'AOE ATK 2+ after supering' },
-    { label: 'Super ATK',                  id: 'super_atk',   defaultLabel: 'Super ATK' },
-    { label: 'Super ATK (custom label)',   id: 'super_atk',   customLabel: true },
+const OUTPUT_PRESETS = [
+    { label: 'Normal ATK',                id: 'normal_atk',  defaultLabel: 'Normal ATK' },
+    { label: 'Normal ATK after supering', id: 'normal_atk2', defaultLabel: 'Normal ATK after supering' },
+    { label: 'AOE ATK 2+',                id: 'aoe_atk',     defaultLabel: 'AOE ATK 2+' },
+    { label: 'AOE ATK 2+ after supering', id: 'aoe_atk2',    defaultLabel: 'AOE ATK 2+ after supering' },
+    { label: 'Super ATK',                 id: 'super_atk',   defaultLabel: 'Super ATK' },
+    { label: 'Super ATK (custom label)',  id: 'super_atk',   customLabel: true },
 ];
 
 // ─── ID helpers ───────────────────────────────────────────────────────────────
 
-const stageId  = (eventId, n) => `${eventId}00${n}5`;
-const phaseId  = (sId, n)     => `${sId}${n}`;
-const enemyId  = (phId, n)    => `${phId}${n}`;
+const mkStageId  = (eventId, n)         => `${eventId}00${n}5`;
+// Single-battle stages reuse the stage ID as the battle ID (existing convention).
+// Multi-battle stages append the battle number.
+const mkBattleId = (stageId, n, single) => single ? stageId : `${stageId}${n}`;
+const mkPhaseId  = (battleId, n)        => `${battleId}${n}`;
+const mkEnemyId  = (phaseId, n)         => `${phaseId}${n}`;
+
+// ─── input / output collectors ────────────────────────────────────────────────
+
+async function collectInputs() {
+    const inputs = [];
+    console.log('\n  ── Inputs (presets or custom; leave empty for static enemy) ──');
+    for (;;) {
+        if (inputs.length) console.log(`  Collected: ${inputs.map(i => i.id).join(', ')}`);
+        const menu = [...INPUT_PRESETS, { label: '(done — no more inputs)' }];
+        menu.forEach((o, i) => console.log(`    ${i + 1}. ${o.label}`));
+        const n = parseInt(await ask('  Add input'), 10);
+        if (n === menu.length || isNaN(n)) break;
+        if (n < 1 || n > menu.length - 1) { console.log('  ⚠  Invalid.'); continue; }
+        const inp = await INPUT_PRESETS[n - 1].build();
+        inputs.push(inp);
+        console.log(`  ✓ Added: ${inp.id}`);
+    }
+    return inputs;
+}
+
+async function collectOutputs() {
+    console.log('\n  ── Outputs ──');
+    const selected = await pickMany('Select all outputs that apply:', OUTPUT_PRESETS);
+    const results = [];
+    for (const opt of selected) {
+        const label = opt.customLabel ? await ask('  Super ATK label', 'Super ATK') : opt.defaultLabel;
+        results.push({ id: opt.id, label });
+    }
+    return results;
+}
+
+// ─── section collectors (each returns data or GO_BACK) ────────────────────────
+
+/**
+ * Collects one enemy.
+ * navPrompt 'redo' restarts the outer for(;;) loop — re-asks everything for this enemy.
+ * navPrompt 'back' returns GO_BACK to the phase collector.
+ */
+async function collectEnemy(phaseId, enemyNum, totalInPhase) {
+    for (;;) {
+        console.log(`\n  ── Enemy ${enemyNum}${totalInPhase > 1 ? ` of ${totalInPhase}` : ''} ──`);
+        const name      = await ask('  Enemy name');
+        const imageFile = await ask('  Image file (e.g. card_1234567_thumb.jpg)');
+        const type      = await pickOne('Type:', TYPES);
+        const rarity    = await pickOne('Rarity:', RARITIES);
+        const inputs    = await collectInputs();
+        const outputs   = await collectOutputs();
+        const id        = mkEnemyId(phaseId, enemyNum);
+
+        const nav = await navPrompt(`Enemy "${name}" (id: ${id})`);
+        if (nav === 'back') return GO_BACK;
+        if (nav === 'redo') continue;
+        return { id, name, imageFile, typeIcon: type.typeIcon, bg: type.bg, rarity: rarity.value, inputs, outputs };
+    }
+}
+
+/**
+ * Collects all enemies for one phase.
+ * GO_BACK from enemy 0 propagates up; from enemy N>0 steps back one enemy.
+ */
+async function collectPhase(battleId, phaseNum, numPhases) {
+    for (;;) {
+        const phaseName  = numPhases === 1 ? 'Phase 1' : await ask(`Phase ${phaseNum} name`, `Phase ${phaseNum}`);
+        const phaseId    = mkPhaseId(battleId, phaseNum);
+        const numEnemies = await askInt('Number of enemies in this phase', 1, 1);
+
+        const enemies  = [];
+        let ei         = 0;
+        let wentBack   = false;
+
+        while (ei < numEnemies) {
+            const res = await collectEnemy(phaseId, ei + 1, numEnemies);
+            if (res === GO_BACK) {
+                if (ei > 0) { enemies.pop(); ei--; }   // step back one enemy
+                else { wentBack = true; break; }        // propagate to phase level
+                continue;
+            }
+            enemies.push(res);
+            ei++;
+        }
+
+        if (wentBack) return GO_BACK;
+
+        const nav = await navPrompt(`Phase "${phaseName}" — ${enemies.length} enemy(ies)`);
+        if (nav === 'back') return GO_BACK;
+        if (nav === 'redo') continue;
+        return { id: phaseId, name: phaseName, enemies };
+    }
+}
+
+/**
+ * Collects all phases for one battle.
+ * GO_BACK from phase 0 propagates up; from phase N>0 steps back one phase.
+ */
+async function collectBattle(battleId, battleName) {
+    for (;;) {
+        console.log(`\n── Battle: "${battleName}" ${'─'.repeat(Math.max(2, 40 - battleName.length))}`);
+        const numPhases = await askInt('Number of phases', 1, 1);
+
+        const phases   = [];
+        let pi         = 0;
+        let wentBack   = false;
+
+        while (pi < numPhases) {
+            const res = await collectPhase(battleId, pi + 1, numPhases);
+            if (res === GO_BACK) {
+                if (pi > 0) { phases.pop(); pi--; }    // step back one phase
+                else { wentBack = true; break; }        // propagate to battle level
+                continue;
+            }
+            phases.push(res);
+            pi++;
+        }
+
+        if (wentBack) return GO_BACK;
+
+        const totalEnemies = phases.reduce((s, p) => s + p.enemies.length, 0);
+        const nav = await navPrompt(`Battle "${battleName}" — ${phases.length} phase(s), ${totalEnemies} enemy(ies)`);
+        if (nav === 'back') return GO_BACK;
+        if (nav === 'redo') continue;
+        return { id: battleId, name: battleName, phases };
+    }
+}
+
+/**
+ * Collects content for all battles.
+ * GO_BACK from battle 0 propagates up; from battle N>0 steps back one battle.
+ */
+async function collectAllContent(battleDefs) {
+    const collected = [];
+    let bi = 0;
+
+    while (bi < battleDefs.length) {
+        const { id, name } = battleDefs[bi];
+        const res = await collectBattle(id, name);
+        if (res === GO_BACK) {
+            if (bi > 0) { collected.pop(); bi--; }   // step back one battle
+            else return GO_BACK;                      // propagate to top-level
+            continue;
+        }
+        collected.push(res);
+        bi++;
+    }
+
+    return collected;
+}
 
 // ─── code generators ─────────────────────────────────────────────────────────
 
-function indentBlock(str, spaces) {
-    const pad = ' '.repeat(spaces);
-    return str.split('\n').map(l => pad + l).join('\n');
-}
-
 function fmtInput(inp) {
-    if (inp.type === 'checkbox') {
-        return `{ id: "${inp.id}", label: "${inp.label}", type: "checkbox", default: ${inp.default} }`;
-    }
-    return `{ id: "${inp.id}", label: "${inp.label}", type: "number", min: ${inp.min}, max: ${inp.max}, default: ${inp.default} }`;
+    return inp.type === 'checkbox'
+        ? `{ id: "${inp.id}", label: "${inp.label}", type: "checkbox", default: ${inp.default} }`
+        : `{ id: "${inp.id}", label: "${inp.label}", type: "number", min: ${inp.min}, max: ${inp.max}, default: ${inp.default} }`;
 }
 
 function fmtOutput(out) {
     return `{ id: "${out.id}", label: "${out.label}" }`;
 }
 
-function generateEnemyBlock(enemy, indent) {
-    const p = n => ' '.repeat(n);
-    const baseIndent = indent;
-    const propIndent = indent + 4;
-    const listIndent = indent + 8;
+const pad = n => ' '.repeat(n);
 
-    const inputLines = enemy.inputs.length
-        ? '\n' + enemy.inputs.map(i => `${p(listIndent)}${fmtInput(i)}`).join(',\n') + `\n${p(propIndent)}`
+function enemyBlock(enemy, indent) {
+    const ip = indent, pp = indent + 4, lp = indent + 8;
+    const ins  = enemy.inputs.length
+        ? '\n' + enemy.inputs.map(i  => `${pad(lp)}${fmtInput(i)}`).join(',\n')  + `\n${pad(pp)}`
         : '';
-
-    const outputLines = enemy.outputs.length
-        ? '\n' + enemy.outputs.map(o => `${p(listIndent)}${fmtOutput(o)}`).join(',\n') + `\n${p(propIndent)}`
+    const outs = enemy.outputs.length
+        ? '\n' + enemy.outputs.map(o => `${pad(lp)}${fmtOutput(o)}`).join(',\n') + `\n${pad(pp)}`
         : '';
-
     return [
-        `${p(baseIndent)}{`,
-        `${p(propIndent)}id: "${enemy.id}",`,
-        `${p(propIndent)}name: "${enemy.name}",`,
-        `${p(propIndent)}image: "images/enemies/${enemy.imageFile}",`,
-        `${p(propIndent)}typeIcon: 'images/types/${enemy.typeIcon}.jpg',`,
-        `${p(propIndent)}rarityIcon: 'images/rarity/${enemy.rarity}.jpg',`,
-        `${p(propIndent)}background: 'images/bgs/${enemy.bg}.jpg',`,
-        `${p(propIndent)}inputs: [${inputLines}],`,
-        `${p(propIndent)}formula: "${enemy.id}",`,
-        `${p(propIndent)}outputs: [${outputLines}],`,
-        `${p(baseIndent)}}`,
+        `${pad(ip)}{`,
+        `${pad(pp)}id: "${enemy.id}",`,
+        `${pad(pp)}name: "${enemy.name}",`,
+        `${pad(pp)}image: "images/enemies/${enemy.imageFile}",`,
+        `${pad(pp)}typeIcon: 'images/types/${enemy.typeIcon}.jpg',`,
+        `${pad(pp)}rarityIcon: 'images/rarity/${enemy.rarity}.jpg',`,
+        `${pad(pp)}background: 'images/bgs/${enemy.bg}.jpg',`,
+        `${pad(pp)}inputs: [${ins}],`,
+        `${pad(pp)}formula: "${enemy.id}",`,
+        `${pad(pp)}outputs: [${outs}],`,
+        `${pad(ip)}}`,
     ].join('\n');
 }
 
-function generateDataSnippet(event, stage, phases) {
-    const p = n => ' '.repeat(n);
-
-    const phasesBlock = phases.map(ph => {
-        const enemiesBlock = ph.enemies.map(e => generateEnemyBlock(e, 48)).join(',\n');
+function generateDataSnippet(event, stage, battles) {
+    const battlesBlock = battles.map(b => {
+        const phasesBlock = b.phases.map(ph => {
+            const enemiesBlock = ph.enemies.map(e => enemyBlock(e, 52)).join(',\n');
+            return [
+                `${pad(36)}{`,
+                `${pad(40)}id: "${ph.id}",`,
+                `${pad(40)}name: "${ph.name}",`,
+                `${pad(40)}enemies: [`,
+                enemiesBlock,
+                `${pad(40)}],`,
+                `${pad(36)}}`,
+            ].join('\n');
+        }).join(',\n');
         return [
-            `${p(32)}{`,
-            `${p(36)}id: "${ph.id}",`,
-            `${p(36)}name: "${ph.name}",`,
-            `${p(36)}enemies: [`,
-            enemiesBlock,
-            `${p(36)}],`,
-            `${p(32)}}`,
+            `${pad(24)}{`,
+            `${pad(28)}id: "${b.id}",`,
+            `${pad(28)}name: "${b.name}",`,
+            `${pad(28)}phases: [`,
+            phasesBlock,
+            `${pad(28)}],`,
+            `${pad(24)}}`,
         ].join('\n');
     }).join(',\n');
 
     return [
-        `        // ─── Paste inside the events: [ ... ] array ───`,
+        `        // ─── Paste inside  events: [ ... ]  in js/data.js ───`,
         `        {`,
         `            id: "${event.id}",`,
         `            name: "${event.name}",`,
@@ -225,13 +387,7 @@ function generateDataSnippet(event, stage, phases) {
         `                    id: "${stage.id}",`,
         `                    name: "${stage.name}",`,
         `                    battles: [`,
-        `                        {`,
-        `                            id: "${stage.id}",`,
-        `                            name: "${stage.name}",`,
-        `                            phases: [`,
-        phasesBlock,
-        `                            ]`,
-        `                        }`,
+        battlesBlock,
         `                    ]`,
         `                },`,
         `            ]`,
@@ -239,185 +395,179 @@ function generateDataSnippet(event, stage, phases) {
     ].join('\n');
 }
 
-function generateFormulaStub(enemy, eventName, stageName) {
-    const varLines = enemy.inputs.map(inp => {
-        if (inp.type === 'checkbox') {
-            return `        const ${inp.id} = inputs.${inp.id} !== undefined ? inputs.${inp.id} : ${inp.default};`;
-        }
-        return `        const ${inp.id} = (inputs.${inp.id} !== undefined && inputs.${inp.id} !== null) ? inputs.${inp.id} : ${inp.default};`;
-    });
-
-    const returnLines = enemy.outputs.map(o => `            ${o.id}: 0, // TODO`);
-
-    const lines = [
-        `    // ${eventName} – ${stageName} – ${enemy.name}`,
+function formulaStub(enemy, eventName, battleName) {
+    const varLines = enemy.inputs.map(inp =>
+        inp.type === 'checkbox'
+            ? `        const ${inp.id} = inputs.${inp.id} !== undefined ? inputs.${inp.id} : ${inp.default};`
+            : `        const ${inp.id} = (inputs.${inp.id} !== undefined && inputs.${inp.id} !== null) ? inputs.${inp.id} : ${inp.default};`
+    );
+    const retLines = enemy.outputs.map(o => `            ${o.id}: 0, // TODO`);
+    return [
+        `    // ${eventName} – ${battleName} – ${enemy.name}`,
         `    ${enemy.id}: function (inputs) {`,
-    ];
-
-    if (varLines.length) {
-        lines.push(...varLines);
-        lines.push('');
-    }
-
-    lines.push(
+        ...varLines,
+        varLines.length ? '' : null,
         `        const baseAtk = 0; // TODO: set base ATK`,
         ``,
         `        return {`,
-        ...returnLines,
+        ...retLines,
         `        };`,
         `    },`,
-    );
-
-    return lines.join('\n');
+    ].filter(l => l !== null).join('\n');
 }
 
-// ─── collection helpers ───────────────────────────────────────────────────────
-
-async function collectInputs() {
-    const inputs = [];
-    console.log('\n  ── Inputs ──');
-
-    while (true) {
-        console.log('\n  Add input:');
-        const menuOptions = [...INPUT_PRESETS, { label: '(done – no more inputs)' }];
-        menuOptions.forEach((o, i) => console.log(`    ${i + 1}. ${o.label}`));
-
-        const raw = await ask('  Choice');
-        const n = parseInt(raw, 10);
-
-        if (isNaN(n) || n === menuOptions.length) break;
-        if (n < 1 || n > menuOptions.length - 1) { console.log('  ⚠  Invalid.'); continue; }
-
-        const inp = await INPUT_PRESETS[n - 1].build();
-        inputs.push(inp);
-        console.log(`  ✓ Added: ${inp.id}`);
-    }
-
-    return inputs;
-}
-
-async function collectOutputs() {
-    console.log('\n  ── Outputs ──');
-    const selected = await pickMany('Select outputs (all that apply):', OUTPUT_OPTIONS);
-
-    const results = [];
-    for (const opt of selected) {
-        if (opt.customLabel) {
-            const label = await ask('  Super ATK label (e.g. "Super ATK (ignores 70% DEF)")', 'Super ATK');
-            results.push({ id: opt.id, label });
-        } else {
-            results.push({ id: opt.id, label: opt.defaultLabel });
-        }
-    }
-    return results;
-}
-
-async function collectEnemy(phId, n, totalInPhase) {
-    console.log(`\n  ── Enemy ${n}${totalInPhase > 1 ? ` of ${totalInPhase}` : ''} ──`);
-    const name      = await ask('  Enemy name');
-    const imageFile = await ask('  Image filename (e.g. card_1234567_thumb.jpg)');
-    const type      = await pickOne('Type:', TYPES);
-    const rarity    = await pickOne('Rarity:', RARITIES);
-    const inputs    = await collectInputs();
-    const outputs   = await collectOutputs();
-
-    return {
-        id: enemyId(phId, n),
-        name,
-        imageFile,
-        typeIcon: type.typeIcon,
-        bg:       type.bg,
-        rarity:   rarity.value,
-        inputs,
-        outputs,
-    };
-}
-
-// ─── main ─────────────────────────────────────────────────────────────────────
+// ─── main: step machine for event / stage / battles, then content ─────────────
 
 async function main() {
-    console.log('\n╔═════════════════════════════════════════╗');
-    console.log('║   Dokkan Battle – New Entry Wizard      ║');
-    console.log('╚═════════════════════════════════════════╝');
-    console.log('\nLeave a field blank to accept the [default].\n');
+    console.log('\n╔═══════════════════════════════════════════╗');
+    console.log('║  Dokkan Battle – New Entry Wizard  (v2)  ║');
+    console.log('╚═══════════════════════════════════════════╝');
+    console.log('\nAt every section prompt:  [Enter] continue  [r] redo  [b] back\n');
 
-    // ── Event ──
-    console.log('── Event ──────────────────────────────────');
-    const eventId   = await ask('Event ID (4 digits, e.g. 1730)');
-    const eventName = await ask('Event name');
-    const event     = { id: eventId, name: eventName, image: `images/events/${eventId}.jpg` };
+    // Shared state — persisted across step revisits so previous values become defaults.
+    let event, stage, battleDefs;
+    let step = 0;
 
-    // ── Stage ──
-    console.log('\n── Stage ──────────────────────────────────');
-    const stageNum  = await askInt('Stage number (1 for first, 2 for second…)', 1, 1);
-    const stageName = await ask('Stage name');
-    const sId       = stageId(eventId, stageNum);
-    const stage     = { id: sId, name: stageName };
+    // ── Steps 0-2: collect event / stage / battle definitions ────────────────
+    // Numeric step counter lets back/redo naturally re-run the right section.
+    // Revisiting a step shows previous values as defaults (press Enter to keep them).
+    while (step < 3) {
+        if (step === 0) {
+            console.log('── Event ──────────────────────────────────────');
+            const id   = await ask('Event ID (4 digits, e.g. 1730)', event && event.id);
+            const name = await ask('Event name', event && event.name);
+            const nav  = await navPrompt(`Event "${name}" (id: ${id}, image: images/events/${id}.jpg)`);
+            if (nav === 'redo') continue;
+            // 'back' at step 0 has nowhere to go — treat same as redo
+            event = { id, name, image: `images/events/${id}.jpg` };
+            step  = 1;
 
-    // ── Phases ──
-    console.log('\n── Phases ─────────────────────────────────');
-    const numPhases = await askInt('Number of phases in this stage', 1, 1);
+        } else if (step === 1) {
+            console.log('\n── Stage ──────────────────────────────────────');
+            const num  = await askInt('Stage number (1, 2, 3, …)', (stage && stage.num) || 1, 1);
+            const name = await ask('Stage name', stage && stage.name);
+            const sId  = mkStageId(event.id, num);
+            const nav  = await navPrompt(`Stage "${name}" (id: ${sId})`);
+            if (nav === 'back') { step = 0; continue; }
+            if (nav === 'redo') continue;
+            stage = { id: sId, name, num };
+            step  = 2;
 
-    const phases    = [];
-    const allEnemies = [];
-
-    for (let p = 1; p <= numPhases; p++) {
-        console.log(`\n── Phase ${p} ${'─'.repeat(35 - String(p).length)}`);
-        const phaseName = numPhases === 1 ? 'Phase 1' : await ask(`Phase ${p} name`, `Phase ${p}`);
-        const phId      = phaseId(sId, p);
-        const numEnemies = await askInt('Number of enemies in this phase', 1, 1);
-
-        const enemies = [];
-        for (let e = 1; e <= numEnemies; e++) {
-            const enemy = await collectEnemy(phId, e, numEnemies);
-            enemies.push(enemy);
-            allEnemies.push({ ...enemy, phaseName, stageName });
+        } else if (step === 2) {
+            console.log('\n── Battles ────────────────────────────────────');
+            const prevCount = battleDefs ? battleDefs.length : 1;
+            const count     = await askInt('Number of battles in this stage', prevCount, 1);
+            const single    = count === 1;
+            const defs      = [];
+            for (let b = 1; b <= count; b++) {
+                const prev  = battleDefs && battleDefs[b - 1];
+                const bId   = mkBattleId(stage.id, b, single);
+                const bName = single ? stage.name : await ask(`Battle ${b} name`, prev ? prev.name : `Battle ${b}`);
+                defs.push({ id: bId, name: bName });
+            }
+            const summary = single
+                ? `1 battle: "${defs[0].name}"`
+                : defs.map((d, i) => `Battle ${i + 1}: "${d.name}"`).join('  |  ');
+            const nav = await navPrompt(summary);
+            if (nav === 'back') { step = 1; continue; }
+            if (nav === 'redo') continue;
+            battleDefs = defs;
+            step = 3;
         }
-        phases.push({ id: phId, name: phaseName, enemies });
     }
 
-    // ── Generate output ──
+    // ── Step 3: collect content (battles → phases → enemies) ─────────────────
+    // If collectAllContent returns GO_BACK (user backed past the first battle),
+    // we drop back into the step machine at step 2 to let them adjust battle defs
+    // (or keep going further back through stage → event).
+    let battles;
+    for (;;) {
+        const result = await collectAllContent(battleDefs);
+        if (result !== GO_BACK) { battles = result; break; }
+
+        // Re-run step machine from step 2 downward with current values as defaults
+        step = 2;
+        while (step < 3) {
+            if (step === 2) {
+                console.log('\n── Battles (edit) ─────────────────────────────');
+                const count  = await askInt('Number of battles in this stage', battleDefs.length, 1);
+                const single = count === 1;
+                const defs   = [];
+                for (let b = 1; b <= count; b++) {
+                    const prev  = battleDefs && battleDefs[b - 1];
+                    const bId   = mkBattleId(stage.id, b, single);
+                    const bName = single ? stage.name : await ask(`Battle ${b} name`, prev ? prev.name : `Battle ${b}`);
+                    defs.push({ id: bId, name: bName });
+                }
+                const summary = single
+                    ? `1 battle: "${defs[0].name}"`
+                    : defs.map((d, i) => `Battle ${i + 1}: "${d.name}"`).join('  |  ');
+                const nav = await navPrompt(summary);
+                if (nav === 'back') { step = 1; continue; }
+                if (nav === 'redo') continue;
+                battleDefs = defs;
+                step = 3;
+
+            } else if (step === 1) {
+                console.log('\n── Stage (edit) ───────────────────────────────');
+                const num  = await askInt('Stage number', stage.num, 1);
+                const name = await ask('Stage name', stage.name);
+                const sId  = mkStageId(event.id, num);
+                const nav  = await navPrompt(`Stage "${name}" (id: ${sId})`);
+                if (nav === 'back') { step = 0; continue; }
+                if (nav === 'redo') continue;
+                stage = { id: sId, name, num };
+                step  = 2;
+
+            } else if (step === 0) {
+                console.log('\n── Event (edit) ───────────────────────────────');
+                const id   = await ask('Event ID', event.id);
+                const name = await ask('Event name', event.name);
+                const nav  = await navPrompt(`Event "${name}" (id: ${id})`);
+                if (nav === 'redo') continue;
+                event = { id, name, image: `images/events/${id}.jpg` };
+                step  = 1;
+            }
+        }
+        // battleDefs now updated — retry content collection
+    }
+
+    // ── Generate and write output ─────────────────────────────────────────────
     console.log('\n\nGenerating snippets…');
 
-    const dataBlock    = generateDataSnippet(event, stage, phases);
-    const formulaBlock = allEnemies.map(e => generateFormulaStub(e, eventName, e.stageName)).join('\n\n');
+    const dataBlock     = generateDataSnippet(event, stage, battles);
+    const allEnemies    = battles.flatMap(b =>
+        b.phases.flatMap(ph => ph.enemies.map(e => ({ ...e, battleName: b.name })))
+    );
+    const formulasBlock = allEnemies.map(e => formulaStub(e, event.name, e.battleName)).join('\n\n');
 
-    const divider = '='.repeat(64);
+    const D = '═'.repeat(64);
     const output = [
-        divider,
+        D,
         'DATA.JS ENTRY',
         'Paste inside the  events: [ ... ]  array in js/data.js.',
-        divider,
-        '',
-        dataBlock,
-        '',
-        divider,
+        D, '', dataBlock, '',
+        D,
         'FORMULAS.JS STUBS',
         'Paste inside the  formulaFunctions = { ... }  object in js/formulas.js.',
-        'Then fill in the TODOs.',
-        divider,
-        '',
-        formulaBlock,
+        'Then fill in baseAtk and the formula logic (TODOs).',
+        D, '', formulasBlock,
     ].join('\n');
 
-    // Write to file
     const outDir  = path.join(__dirname, 'output');
     if (!fs.existsSync(outDir)) fs.mkdirSync(outDir, { recursive: true });
-    const outFile = path.join(outDir, `entry-${eventId}-stage${stageNum}.txt`);
+    const outFile = path.join(outDir, `entry-${event.id}-stage${stage.num}.txt`);
     fs.writeFileSync(outFile, output, 'utf8');
 
-    console.log('\n╔═════════════════════════════════════════╗');
-    console.log('║   Done!                                 ║');
-    console.log('╚═════════════════════════════════════════╝');
-    console.log('\nSnippets saved to:');
-    console.log(`  ${outFile}`);
+    console.log('\n╔═══════════════════════════════════════════╗');
+    console.log('║   Done!                                   ║');
+    console.log('╚═══════════════════════════════════════════╝');
+    console.log(`\nSaved to: ${outFile}`);
     console.log('\nNext steps:');
-    console.log('  1. Open the file above and copy the DATA.JS block');
-    console.log('     → paste into js/data.js (inside events: [ ... ])');
-    console.log('  2. Copy the FORMULAS.JS block');
-    console.log('     → paste into js/formulas.js (inside formulaFunctions)');
-    console.log('  3. Fill in baseAtk and the formula logic (TODOs)');
-    console.log('  4. Run:  npm run obfuscate\n');
+    console.log('  1. Copy DATA.JS block     → paste into js/data.js (inside events: [ ... ])');
+    console.log('  2. Copy FORMULAS.JS block → paste into js/formulas.js (inside formulaFunctions)');
+    console.log('  3. Fill in baseAtk and formula logic (TODOs)');
+    console.log('  4. npm run obfuscate\n');
 
     rl.close();
 }
