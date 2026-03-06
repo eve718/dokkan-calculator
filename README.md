@@ -1,24 +1,26 @@
-# Dokkan Battle ATK Calculator
+# Dokkan Battle Boss ATK Calculator
 
-A free, accurate damage calculator for Dokkan Battle events. Enter your unit's ATK stat and instantly see how much damage you'll deal to each enemy boss across different phases.
+A free, accurate calculator for Dokkan Battle enemy/boss ATK damage. Select an event, stage, and enemy, then enter the relevant inputs to instantly calculate the boss's normal attack, AOE, and super attack damage across different phases and conditions.
 
 **Live:** https://dokkan-battle-atk-calculator.netlify.app/
 
 ## Features
 
-- **Accurate damage calculations** for all supported Dokkan Battle events
-- **Phase-by-phase breakdowns** showing normal attack and super attack damage
-- **Real-time results** as you adjust ATK values
-- **Event-specific formulas** reverse-engineered from in-game data
+- **Accurate damage calculations** for all supported Dokkan Battle events and enemies
+- **Comprehensive attack breakdowns** showing normal attacks, AOEs, and super attacks
+- **In-depth condition modifiers** including DEF values, critical hits, and DEF ignore mechanics
+- **Real-time results** as you adjust inputs
+- **Event-specific formulas** for accurate calculations across all phases
 - **Responsive design** that works on mobile and desktop
 
 ## Quick Start
 
 1. **Visit the site** at the link above
 2. **Choose an event** from the grid
-3. **Select a stage** and phase
-4. **Enter your unit's ATK stat** (visible in-game)
-5. **See instant results** for normal and super attack damage
+3. **Select a stage** and battle
+4. **Pick an enemy** and review its inputs
+5. **Enter the relevant values** (your DEF, presence of buffs, phase conditions, etc.)
+6. **See instant results** for all attack outputs (normal, AOE, super with crit/DEF ignore)
 
 ## Development
 
