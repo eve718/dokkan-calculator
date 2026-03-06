@@ -71,11 +71,11 @@
     <link rel="icon" type="image/x-icon" href="images/icons/favicon.ico">
     <link rel="manifest" href="/site.webmanifest">
 
-    <!-- Typography: Inter via Google Fonts -->
+    <!-- Typography: Inter via Google Fonts (non-render-blocking) -->
     <link rel="preconnect" href="https://fonts.googleapis.com">
     <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
-    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap"
-        rel="stylesheet">
+    <link rel="preload" href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap" as="style" onload="this.onload=null;this.rel='stylesheet'">
+    <noscript><link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap"></noscript>
 
     <link rel="stylesheet" href="css/style.css">
     <link rel="stylesheet" href="css/responsive.css">
@@ -106,9 +106,9 @@
 
             <section class="seo-about" aria-label="About this calculator">
                 <h2>About the Dokkan Battle ATK Calculator</h2>
-                <p>This free tool calculates exact ATK damage for Dokkan Battle events using event-specific formulas. Select an event, choose a stage and phase, enter your unit's ATK stat, and get accurate normal and super attack damage values instantly — no guesswork, no spreadsheets.</p>
-                <p>Currently supported events include Ultimate Red Zone editions (Pure Saiyans, DAIMA, Artificial Life Forms), Supreme Magnificent Battle (Next Generation Super Edition), Special Battle 2025, and The Greatest Tours. New events are added regularly after each global update.</p>
-                <p>All formulas are reverse-engineered from in-game data to match the exact DEF reduction, guard mechanics, and phase-specific modifiers each enemy applies. Use the results to plan your team's ATK investment and clear events reliably.</p>
+                <p>This free tool gives you accurate ATK damage values for Dokkan Battle events. Pick an event, navigate to a stage, then enter your unit's ATK stat to see instant results for normal attacks and super attacks — no spreadsheet required.</p>
+                <p>Each event uses formulas built from in-game data, accounting for the specific DEF reductions, guard mechanics, and phase modifiers that apply to each enemy. The calculator stays up to date as new events are added to the game.</p>
+                <p>Use it to check whether your team hits the damage thresholds needed to clear an event, or to compare different card ATK values before you invest resources.</p>
             </section>
         </div>
     </main>

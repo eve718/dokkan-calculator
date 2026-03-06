@@ -259,6 +259,8 @@ function showEventsPage(container) {
             img.src = event.image;
             img.alt = event.name || 'Event';
             img.className = 'event-image';
+            img.loading = 'lazy';
+            img.decoding = 'async';
             card.appendChild(img);
         }
         
@@ -568,6 +570,8 @@ function createEnemyImageContainer(enemy) {
         bgImg.src = enemy.background;
         bgImg.alt = 'card frame';
         bgImg.className = 'enemy-bg';
+        bgImg.loading = 'lazy';
+        bgImg.decoding = 'async';
         imgContainer.appendChild(bgImg);
     }
 
@@ -576,6 +580,8 @@ function createEnemyImageContainer(enemy) {
     mainImg.src = enemy.image || '';
     mainImg.alt = enemy.name || 'character';
     mainImg.className = 'enemy-image';
+    mainImg.loading = 'lazy';
+    mainImg.decoding = 'async';
     imgContainer.appendChild(mainImg);
 
     // Add type icon overlay
@@ -584,6 +590,8 @@ function createEnemyImageContainer(enemy) {
         typeImg.src = enemy.typeIcon;
         typeImg.alt = 'type';
         typeImg.className = 'enemy-type';
+        typeImg.loading = 'lazy';
+        typeImg.decoding = 'async';
         imgContainer.appendChild(typeImg);
     }
 
@@ -593,6 +601,8 @@ function createEnemyImageContainer(enemy) {
         rarityImg.src = enemy.rarityIcon;
         rarityImg.alt = 'rarity';
         rarityImg.className = 'enemy-rarity';
+        rarityImg.loading = 'lazy';
+        rarityImg.decoding = 'async';
         imgContainer.appendChild(rarityImg);
     }
 
