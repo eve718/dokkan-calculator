@@ -31,6 +31,22 @@ const AppConfig = {
         invisible: 'invisible',
     },
 
+    // ============ MODE TRACKING ============
+    // Track current calculator mode for display logic
+    currentMode: 'atk',  // Start in ATK mode by default
+    setMode: function(mode) {
+        this.currentMode = mode;
+    },
+    getMode: function() {
+        return this.currentMode;
+    },
+
+    // ============ LIVE PANEL REFERENCES ============
+    // Direct element refs so calculator functions work even when the page
+    // is being rendered inside a detached div (before performPageTransition).
+    currentDamageResultsSection: null,
+    currentCharInputsSection: null,
+
     // ============ INPUT VALIDATION ============
     // Default constraints for form inputs
     inputValidation: {
@@ -43,8 +59,8 @@ const AppConfig = {
     // Patterns used for generating DOM element IDs
     // Keep these patterns consistent across all files
     idPatterns: {
-        // Generates: "5150_input_id" (enemy_property format)
-        enemy: (enemyId) => `enemy-${enemyId}`,
+        // Generates: "enemy-form-5150" (used by all enemy-form selectors)
+        enemy: (enemyId) => `enemy-form-${enemyId}`,
         input: (enemyId, inputId) => `${enemyId}_${inputId}`,
         output: (enemyId, outputId) => `${enemyId}_${outputId}`,
     },

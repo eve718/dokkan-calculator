@@ -28,7 +28,56 @@ const NavigationState = {
     }
 };
 
+// Debounce utility for search input
+function debounce(func, delay = 300) {
+    let timeoutId;
+    return function(...args) {
+        clearTimeout(timeoutId);
+        timeoutId = setTimeout(() => func(...args), delay);
+    };
+}
+
+// Helper function: search supports partial word matching
+// "goku d" matches "Goku & Dragon" because "goku" is in name AND word starts with "d"
+// "goku d" does NOT match "Super Saiyan God Goku" because no word starts with "d"
+function searchMatches(name, searchTerms) {
+    const nameLower = name.toLowerCase();
+    if (!searchTerms) return true;
+    const terms = searchTerms.split(/\s+/).filter(t => t);
+    // Check if all terms appear as word starts (word boundaries)
+    // \bterm matches 'term' at the start of a word
+    return terms.every(term => {
+        // Escape special regex characters
+        const escapedTerm = term.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+        const regex = new RegExp(`\\b${escapedTerm}`);
+        return regex.test(nameLower);
+    });
+}
+
 // State object properly initialized
+/**
+ * Setup tooltip positioning for a card element
+ * Uses CSS custom properties to position tooltip above card at viewport level
+ */
+function setupCardTooltip(card, tooltipText) {
+    // Create tooltip element
+    const tooltip = document.createElement('div');
+    tooltip.className = 'card-tooltip';
+    tooltip.textContent = tooltipText;
+    tooltip.style.display = 'none';
+    tooltip.style.pointerEvents = 'none';
+    
+    card.appendChild(tooltip);
+    
+    card.addEventListener('mouseenter', () => {
+        tooltip.style.display = 'block';
+    });
+    
+    card.addEventListener('mouseleave', () => {
+        tooltip.style.display = 'none';
+    });
+}
+
 /**
  * Retrieves battles from a stage, with fallback to legacy phases structure
  * Ensures backward compatibility with older data format
@@ -140,12 +189,21 @@ function showPage(page, eventId = null, stageId = null, battleId = null) {
  */
 function performPageTransition(container, newContent) {
     const { currentContentView } = NavigationState;
+    const footer = document.querySelector('footer');
 
     if (currentContentView) {
-        // Fade out existing content
+        // Store current container height to prevent layout collapse
+        const currentHeight = container.offsetHeight;
+        container.style.minHeight = currentHeight + 'px';
+        
+        // Fade out existing content and footer together
         currentContentView.classList.remove(AppConfig.cssClasses.pageActive);
+        if (footer) {
+            footer.style.opacity = '0';
+        }
 
         setTimeout(() => {
+            // Clear old content and add new content
             container.innerHTML = '';
             container.appendChild(newContent);
 
@@ -154,6 +212,15 @@ function performPageTransition(container, newContent) {
 
             // Fade in new content
             newContent.classList.add(AppConfig.cssClasses.pageActive);
+            
+            // Fade in footer synchronously
+            if (footer) {
+                footer.style.opacity = '1';
+            }
+            
+            // Remove height constraint to allow content to flow naturally
+            container.style.minHeight = '';
+            
             NavigationState.currentContentView = newContent;
         }, AppConfig.pageTransitionDuration);
     } else {
@@ -162,6 +229,9 @@ function performPageTransition(container, newContent) {
         container.appendChild(newContent);
         void newContent.offsetWidth;
         newContent.classList.add(AppConfig.cssClasses.pageActive);
+        if (footer) {
+            footer.style.opacity = '1';
+        }
         NavigationState.currentContentView = newContent;
     }
 }
@@ -243,47 +313,102 @@ function escapeHtml(text) {
  */
 function showEventsPage(container) {
     const title = document.createElement('h2');
-    title.textContent = 'Choose Event';
+    title.textContent = 'Events';
     container.appendChild(title);
+
+
+
+    // Add search bar
+    const searchWrapper = createSearchBar('Search events, stages, battles, or enemies...');
+    container.appendChild(searchWrapper);
 
     const grid = document.createElement('div');
     grid.className = 'card-grid';
+    grid.id = 'events-grid';
 
-    gameData.events.forEach(event => {
-        const card = document.createElement('div');
-        card.className = 'card';
-        
-        // Display event image
-        if (event.image) {
-            const img = document.createElement('img');
-            img.src = event.image;
-            img.alt = event.name || 'Event';
-            img.className = 'event-image';
-            img.loading = 'lazy';
-            img.decoding = 'async';
-            // Explicit dimensions prevent CLS (browser reserves space before image loads)
-            img.width = 300;
-            img.height = 220;
-            card.appendChild(img);
-        }
-        
-        card.addEventListener('click', () => showPage('stages', event.id));
-        grid.appendChild(card);
-    });
+    const events = gameData.events.filter(e => e.visible !== false);
 
+    const renderEvents = (filteredEvents) => {
+        grid.innerHTML = '';
+        grid.style.animation = 'none';
+        void grid.offsetWidth;
+        grid.style.animation = '';
+        grid.style.animation = 'fadeInSearchResults 0.3s ease-in-out';
+        
+        filteredEvents.forEach(event => {
+            const card = document.createElement('div');
+            card.className = 'card';
+            
+            if (event.image) {
+                const img = document.createElement('img');
+                img.src = event.image;
+                img.alt = event.name || 'Event';
+                img.className = 'event-image';
+                img.loading = 'lazy';
+                img.decoding = 'async';
+                img.width = 300;
+                img.height = 220;
+                card.appendChild(img);
+            }
+            
+            card.addEventListener('click', () => showPage('stages', event.id));
+            setupCardTooltip(card, event.name);
+            grid.appendChild(card);
+        });
+    };
+
+    renderEvents(events);
     container.appendChild(grid);
 
-    // Add about section
-    const aboutSection = document.createElement('section');
+    // Add search functionality with comprehensive filtering
+    const searchInput = searchWrapper.querySelector('.search-input');
+    searchInput.addEventListener('input', debounce((e) => {
+        const query = e.target.value.toLowerCase().trim();
+        
+        // Search across events, stages, battles, and enemies
+        const filtered = events.filter(event => {
+            if (searchMatches(event.name, query)) return true;
+            
+            for (const stage of event.stages || []) {
+                if (searchMatches(stage.name, query)) return true;
+                
+                const battles = getStageBattles(stage);
+                for (const battle of battles) {
+                    if (searchMatches(battle.name, query)) return true;
+                    
+                    for (const phase of battle.phases || []) {
+                        for (const enemy of phase.enemies || []) {
+                            if (searchMatches(enemy.name, query)) return true;
+                        }
+                    }
+                }
+            }
+            return false;
+        });
+        
+        renderEvents(filtered);
+    }, 300));
+
+    const aboutSection = document.createElement('p');
     aboutSection.className = 'seo-about';
-    aboutSection.setAttribute('aria-label', 'About this calculator');
-    aboutSection.innerHTML = `
-        <h2>About the Dokkan Battle Boss ATK Calculator</h2>
-        <p>This free tool calculates enemy boss ATK stats in Dokkan Battle events. Select an event, choose a stage and battle, pick an enemy, and enter the relevant inputs. The calculator instantly shows the enemy's normal attack ATK, AOE ATK (if applicable), and super attack ATK with modifiers like critical hits and DEF ignore mechanics.</p>
-        <p>Each enemy has a base ATK stat and various inputs that affect the final ATK calculation. Depending on the enemy, inputs might include buffs, specific phase conditions, enemy-specific multipliers, or other mechanics that modify the ATK value.</p>
-        <p>Use it to understand enemy ATK values across different phases and conditions, compare ATK stats under various scenarios, or plan your team strategy for difficult events.</p>
-    `;
+    aboutSection.textContent = 'Select an event, go to your phase, and look up enemy ATK values. Switch to My Damage mode to calculate exactly how much damage your character takes — DEF, type matchup, damage reduction, and passive guard all accounted for.';
     container.appendChild(aboutSection);
+}
+
+/**
+ * Creates a reusable search bar component
+ * @param {string} placeholder - Placeholder text for the search input
+ * @returns {HTMLElement} Wrapper div containing the search bar
+ */
+function createSearchBar(placeholder) {
+    const wrapper = document.createElement('div');
+    wrapper.className = 'search-bar-wrapper';
+    const input = document.createElement('input');
+    input.type = 'text';
+    input.className = 'search-input';
+    input.placeholder = placeholder;
+    wrapper.appendChild(input);
+    return wrapper;
 }
 
 /**
@@ -300,7 +425,7 @@ function showStagesPage(container, eventId) {
     }
 
     const title = document.createElement('h2');
-    title.textContent = `${escapeHtml(event.name)} – Choose Stage`;
+    title.textContent = event.name;
     container.appendChild(title);
 
     const backButton = document.createElement('button');
@@ -309,33 +434,73 @@ function showStagesPage(container, eventId) {
     backButton.addEventListener('click', () => showPage('events'));
     container.appendChild(backButton);
 
+    const searchWrapper = createSearchBar('Search stages, battles, or enemies...');
+    container.appendChild(searchWrapper);
+
     const grid = document.createElement('div');
     grid.className = 'card-grid';
+    grid.id = 'stages-grid';
 
-    event.stages.forEach(stage => {
-        const card = document.createElement('div');
-        card.className = 'card';
-        const cardContent = document.createElement('div');
-        cardContent.className = 'card-content';
-        cardContent.innerHTML = `<h3>${stage.name}</h3>`;
-        card.appendChild(cardContent);
+    const renderStages = (stages) => {
+        grid.innerHTML = '';
+        grid.style.animation = 'none';
+        void grid.offsetWidth;
+        grid.style.animation = '';
+        grid.style.animation = 'fadeInSearchResults 0.3s ease-in-out';
+        
+        stages.forEach(stage => {
+            const card = document.createElement('div');
+            card.className = 'card';
+            const cardContent = document.createElement('div');
+            cardContent.className = 'card-content';
+            
+            const nameEl = document.createElement('h3');
+            nameEl.style.margin = '0';
+            nameEl.textContent = stage.name;
+            
+            cardContent.appendChild(nameEl);
+            card.appendChild(cardContent);
 
-        // When stage clicked: check number of battles
-        card.addEventListener('click', () => {
-            const battles = getStageBattles(stage);
-            if (battles.length === 1) {
-                // Only one battle → go directly to enemies page with that battle
-                showPage('enemies', eventId, stage.id, battles[0].id);
-            } else {
-                // multiple battles → show battle selection
-                showPage('battles', eventId, stage.id);
-            }
+            card.addEventListener('click', () => {
+                const battles = getStageBattles(stage);
+                if (battles.length === 1) {
+                    showPage('enemies', eventId, stage.id, battles[0].id);
+                } else {
+                    showPage('battles', eventId, stage.id);
+                }
+            });
+
+            setupCardTooltip(card, stage.name);
+            grid.appendChild(card);
         });
+    };
 
-        grid.appendChild(card);
-    });
-
+    renderStages(event.stages);
     container.appendChild(grid);
+
+    const searchInput = searchWrapper.querySelector('.search-input');
+    searchInput.addEventListener('input', debounce((e) => {
+        const query = e.target.value.toLowerCase().trim();
+        
+        // Search stages by name, battles by name, or enemies by name
+        const filtered = event.stages.filter(stage => {
+            if (searchMatches(stage.name, query)) return true;
+            
+            const battles = getStageBattles(stage);
+            for (const battle of battles) {
+                if (searchMatches(battle.name, query)) return true;
+                
+                for (const phase of battle.phases || []) {
+                    for (const enemy of phase.enemies || []) {
+                        if (searchMatches(enemy.name, query)) return true;
+                    }
+                }
+            }
+            return false;
+        });
+        
+        renderStages(filtered);
+    }, 300));
 }
 
 /**
@@ -351,31 +516,76 @@ function showBattlesPage(container, eventId, stageId) {
     if (!stage) return;
 
     const title = document.createElement('h2');
-    title.textContent = `${stage.name} – Choose Battle`;
+    title.textContent = stage.name;
     container.appendChild(title);
 
-    const backBtn = document.createElement('button');
-    backBtn.className = 'back-button';
-    backBtn.textContent = '← Back to Stages';
-    backBtn.addEventListener('click', () => showPage('stages', eventId));
-    container.appendChild(backBtn);
+    const backButton = document.createElement('button');
+    backButton.className = 'back-button';
+    backButton.textContent = '← Back to Stages';
+    backButton.addEventListener('click', () => showPage('stages', eventId));
+    container.appendChild(backButton);
+
+    const searchWrapper = createSearchBar('Search battles or enemies...');
+    container.appendChild(searchWrapper);
 
     const grid = document.createElement('div');
     grid.className = 'card-grid';
+    grid.id = 'battles-grid';
 
     const battles = getStageBattles(stage);
-    battles.forEach(battle => {
-        const card = document.createElement('div');
-        card.className = 'card';
-        const cardContent = document.createElement('div');
-        cardContent.className = 'card-content';
-        cardContent.innerHTML = `<h3>${battle.name}</h3>`;
-        card.appendChild(cardContent);
-        card.addEventListener('click', () => showPage('enemies', eventId, stageId, battle.id));
-        grid.appendChild(card);
-    });
 
+    const renderBattles = (battlesList) => {
+        grid.innerHTML = '';
+        grid.style.animation = 'none';
+        void grid.offsetWidth;
+        grid.style.animation = '';
+        grid.style.animation = 'fadeInSearchResults 0.3s ease-in-out';
+        
+        battlesList.forEach(battle => {
+            const card = document.createElement('div');
+            card.className = 'card';
+            const cardContent = document.createElement('div');
+            cardContent.className = 'card-content';
+            cardContent.style.display = 'flex';
+            cardContent.style.alignItems = 'center';
+            cardContent.style.justifyContent = 'space-between';
+            cardContent.style.width = '100%';
+            
+            const nameEl = document.createElement('h3');
+            nameEl.style.margin = '0';
+            nameEl.style.flex = '1';
+            nameEl.textContent = battle.name;
+            
+            cardContent.appendChild(nameEl);
+            card.appendChild(cardContent);
+            
+            card.addEventListener('click', () => showPage('enemies', eventId, stageId, battle.id));
+            setupCardTooltip(card, battle.name);
+            grid.appendChild(card);
+        });
+    };
+
+    renderBattles(battles);
     container.appendChild(grid);
+
+    const searchInput = searchWrapper.querySelector('.search-input');
+    searchInput.addEventListener('input', debounce((e) => {
+        const query = e.target.value.toLowerCase().trim();
+        
+        // Search battles by name or enemies by name
+        const filtered = battles.filter(battle => {
+            if (searchMatches(battle.name, query)) return true;
+            
+            for (const phase of battle.phases || []) {
+                for (const enemy of phase.enemies || []) {
+                    if (searchMatches(enemy.name, query)) return true;
+                }
+            }
+            return false;
+        });
+        
+        renderBattles(filtered);
+    }, 300));
 }
 
 /**
@@ -420,65 +630,87 @@ function showEnemiesPage(container, eventId, stageId, battleId) {
     });
     container.appendChild(backButton);
 
-    // Add notice about using with Damage Calculator
-    const noticeBox = document.createElement('div');
-    noticeBox.className = 'notice-box';
-    const noticeText = document.createElement('p');
-    noticeText.innerHTML = '<strong>Tip:</strong> Use these ATK values with the <a href="https://dokkan-damage-calculator.netlify.app/" target="_blank" rel="noopener noreferrer">Dokkan Damage Calculator</a> to compute damage received.';
-    noticeBox.appendChild(noticeText);
-    container.appendChild(noticeBox);
+    // Create phase-level damage calculator (mode toggle + character inputs)
+    // damageResultsSection is appended after enemyFormsContainer so the flow is:
+    //   set character → fill enemy inputs → see damage results at bottom
+    const { damageResultsSection } = createPhaseDamageCalculator(container, (mode) => {});
 
-    // Create phase selection dropdown only if there's more than one phase
+    // Create phase selection tabs (single row layout)
     const enemyFormsContainer = document.createElement('div');
     enemyFormsContainer.id = 'enemy-forms-container';
 
+    // Track currently selected phase
+    let currentSelectedPhase = battle.phases.length > 0 ? battle.phases[0] : null;
+
+    // Create phase header container with tabs and buttons
+    const phaseTabsContainer = document.createElement('div');
+    phaseTabsContainer.className = 'phase-tabs-container';
+
     if (battle.phases.length > 1) {
-        const phaseSelectContainer = document.createElement('div');
-        phaseSelectContainer.className = 'phase-select-container';
+        // Multi-phase: show all phase tabs in single row
+        const phasesRow = document.createElement('div');
+        phasesRow.className = 'phases-row';
+        phasesRow.style.display = 'flex';
+        phasesRow.style.alignItems = 'center';
+        phasesRow.style.gap = '10px';
+        phasesRow.style.marginBottom = '20px';
+        
+        battle.phases.forEach((phase, index) => {
+            const tab = document.createElement('button');
+            tab.className = `phase-tab ${index === 0 ? 'active' : ''}`;
+            const phaseNumber = index + 1;
+            tab.textContent = `Phase ${phaseNumber}`;
+            tab.setAttribute('aria-selected', index === 0 ? 'true' : 'false');
+            tab.dataset.phaseId = phase.id;
+            
+            tab.addEventListener('click', () => {
+                // Update active tab
+                document.querySelectorAll('.phase-tab').forEach(t => {
+                    t.classList.remove('active');
+                    t.setAttribute('aria-selected', 'false');
+                });
+                tab.classList.add('active');
+                tab.setAttribute('aria-selected', 'true');
+                
+                // Update selected phase
+                currentSelectedPhase = phase;
+                
 
-        const phaseLabel = document.createElement('label');
-        phaseLabel.textContent = 'Select Phase:';
-        phaseLabel.setAttribute('for', 'phase-select');
 
-        const phaseSelect = document.createElement('select');
-        phaseSelect.id = 'phase-select';
-
-        battle.phases.forEach(phase => {
-            const opt = document.createElement('option');
-            opt.value = phase.id;
-            opt.textContent = phase.name;
-            phaseSelect.appendChild(opt);
+                // Update content with smooth animation
+                const formsContainer = document.getElementById('enemy-forms-container');
+                
+                if (formsContainer) {
+                    // Simple fade-out, update, fade-in sequence
+                    formsContainer.style.opacity = '0';
+                    formsContainer.style.transition = 'opacity 0.25s ease-out';
+                    
+                    // Update content after fade starts
+                    setTimeout(() => {
+                        displayEnemiesForPhase(formsContainer, phase, battle.phases.length);
+                        // Fade back in
+                        formsContainer.style.opacity = '1';
+                        formsContainer.style.transition = 'opacity 0.35s ease-in';
+                    }, 130);
+                    
+                    // Clean up inline styles after animation completes
+                    setTimeout(() => {
+                        formsContainer.style.transition = '';
+                        formsContainer.style.opacity = '';
+                    }, 500);
+                }
+            });
+            
+            phasesRow.appendChild(tab);
         });
+        
 
-        // Event listener for phase selection
-        phaseSelect.addEventListener('change', function () {
-            const selectedPhaseId = this.value;
-            const selectedPhase = battle.phases.find(p => p.id === selectedPhaseId);
-            const container = document.getElementById('enemy-forms-container');
-            if (container) {
-                container.classList.add('fade-out');
-            }
-
-            // Wait for animation to complete before changing content
-            setTimeout(() => {
-                displayEnemiesForPhase(container, selectedPhase, battle.phases.length);
-
-                // Add fade-in animation
-                container.classList.remove('fade-out');
-                container.classList.add('fade-in');
-
-                // Remove animation class after completion
-                setTimeout(() => {
-                    container.classList.remove('fade-in');
-                }, AppConfig.pageTransitionDuration);
-            }, AppConfig.pageTransitionDuration);
-        });
-
-        phaseSelectContainer.appendChild(phaseLabel);
-        phaseSelectContainer.appendChild(phaseSelect);
-        container.appendChild(phaseSelectContainer);
+        phaseTabsContainer.appendChild(phasesRow);
     }
+
+    container.appendChild(phaseTabsContainer);
     container.appendChild(enemyFormsContainer);
+    container.appendChild(damageResultsSection);
 
     // Display enemies for the first phase by default
     if (battle.phases.length > 0) {
@@ -508,6 +740,17 @@ function displayEnemiesForPhase(container, phase, totalPhases = 1) {
     // Clear previous content
     container.innerHTML = '';
 
+    // Clear the shared damage results panel so stale enemy blocks don't linger
+    const sharedDamageResults = document.getElementById('damage-results-section')
+        || AppConfig.currentDamageResultsSection;
+    if (sharedDamageResults) {
+        const titleEl = sharedDamageResults.querySelector('p');
+        sharedDamageResults.innerHTML = '';
+        if (titleEl) sharedDamageResults.appendChild(titleEl);
+        // Re-hide until new results are written
+        sharedDamageResults.style.display = 'none';
+    }
+
     // Render each enemy in the phase
     phase.enemies.forEach(enemy => {
         if (!enemy.id) {
@@ -517,6 +760,17 @@ function displayEnemiesForPhase(container, phase, totalPhases = 1) {
 
         createEnemyForm(container, enemy);
     });
+
+    // Attach character input listeners (safe even when panel is detached)
+    setupCharacterInputListeners();
+
+    // In damage mode the enemy forms are hidden — keep that state after phase switch
+    const formsContainer = container;
+    if (AppConfig.getMode() === 'damage') {
+        formsContainer.style.display = 'none';
+    } else {
+        formsContainer.style.display = '';
+    }
 }
 
 /**
@@ -526,14 +780,21 @@ function displayEnemiesForPhase(container, phase, totalPhases = 1) {
  * @param {Object} enemy - Enemy data object
  */
 function createEnemyForm(container, enemy) {
-    // Create enemy form wrapper
     const enemyForm = document.createElement('div');
     enemyForm.className = 'enemy-form';
     enemyForm.id = AppConfig.idPatterns.enemy(enemy.id);
 
     // Add enemy name heading
-    const nameHeading = document.createElement('h4');
-    nameHeading.textContent = enemy.name || 'Unknown Enemy';
+    const nameHeading = document.createElement('div');
+    nameHeading.style.display = 'flex';
+    nameHeading.style.alignItems = 'center';
+    nameHeading.style.justifyContent = 'center';
+    nameHeading.style.marginBottom = '15px';
+
+    const h4 = document.createElement('h4');
+    h4.textContent = enemy.name || 'Unknown Enemy';
+    h4.style.margin = '0';
+    nameHeading.appendChild(h4);
     enemyForm.appendChild(nameHeading);
 
     // Create image container with card artwork and overlays
@@ -555,9 +816,59 @@ function createEnemyForm(container, enemy) {
         enemyForm.appendChild(formGroup);
     }
 
-    // Create results display section
+    // Create prominent results card
+    const resultsCard = document.createElement('div');
+    resultsCard.className = 'results-card';
+    resultsCard.id = `results-card-${enemy.id}`;
+    resultsCard.style.display = 'none'; // Hidden until results are calculated
+
+    const resultsValues = document.createElement('div');
+    resultsValues.className = 'results-values';
+    resultsValues.id = `results-values-${enemy.id}`;
+    resultsCard.appendChild(resultsValues);
+
+    // Create results action buttons
+    const resultsActions = document.createElement('div');
+    resultsActions.className = 'results-actions';
+
+    const copyBtn = document.createElement('button');
+    copyBtn.className = 'btn-copy-results';
+    copyBtn.textContent = '📋 Copy Results';
+    copyBtn.addEventListener('click', async () => {
+        // Gather input values the same way calculateATK does (with defaults applied)
+        const inputs = {};
+        if (enemy.inputs && Array.isArray(enemy.inputs)) {
+            for (const input of enemy.inputs) {
+                const inputElement = document.getElementById(AppConfig.idPatterns.input(enemy.id, input.id));
+                if (!inputElement) {
+                    inputs[input.id] = input.default ?? AppConfig.defaults.emptyInputValue;
+                    continue;
+                }
+                if (input.type === 'checkbox') {
+                    inputs[input.id] = inputElement.checked;
+                } else {
+                    const rawValue = inputElement.value.trim();
+                    if (rawValue === '') {
+                        inputs[input.id] = input.default ?? AppConfig.defaults.emptyInputValue;
+                    } else {
+                        const parsedValue = parseFloat(rawValue);
+                        inputs[input.id] = isNaN(parsedValue) ? (input.default ?? AppConfig.defaults.emptyInputValue) : parsedValue;
+                    }
+                }
+            }
+        }
+        const resultsText = formatResultsForClipboard(enemy, resultsValues, inputs);
+        await ClipboardOps.copy(resultsText, copyBtn);
+    });
+    resultsActions.appendChild(copyBtn);
+
+    resultsCard.appendChild(resultsActions);
+    enemyForm.appendChild(resultsCard);
+
+    // Create old results display section (for internal use, hidden visually)
     const resultsContainer = document.createElement('div');
     resultsContainer.className = 'results-container';
+    resultsContainer.style.display = 'none';
     if (enemy.outputs && Array.isArray(enemy.outputs)) {
         enemy.outputs.forEach(output => {
             const resultDiv = document.createElement('div');
@@ -573,9 +884,458 @@ function createEnemyForm(container, enemy) {
     }
 
     container.appendChild(enemyForm);
+    calculateATK(enemy, enemyForm);
+}
 
-    // Trigger initial calculation
-    setTimeout(() => calculateATK(enemy), AppConfig.retryCheckDelay);
+/**
+ * Create phase-level damage calculator interface
+ * Allows toggling between ATK and Damage Received modes
+ * Character inputs apply to all enemies in the phase
+ * @param {HTMLElement} container - Container to append to
+ * @param {Object} phase - Phase data object
+ * @param {Function} onModeChange - Callback when mode changes
+ */
+function createPhaseDamageCalculator(container, onModeChange) {
+    // Main container — flat section, no card chrome
+    const damageCalcContainer = document.createElement('div');
+    damageCalcContainer.className = 'phase-damage-calculator';
+    damageCalcContainer.id = 'damage-calc-container';
+    damageCalcContainer.style.marginBottom = '20px';
+
+    // Mode switcher
+    const modeContainer = document.createElement('div');
+    modeContainer.style.display = 'flex';
+    modeContainer.style.gap = '8px';
+    modeContainer.style.marginBottom = '20px';
+    modeContainer.style.alignItems = 'center';
+
+    const atkBtn = document.createElement('button');
+    atkBtn.className = 'mode-btn mode-atk';
+    atkBtn.textContent = '💥 Enemy ATK';
+    atkBtn.style.padding = '10px 16px';
+    atkBtn.style.background = 'rgba(99, 179, 237, 0.3)';
+    atkBtn.style.border = '1.5px solid rgba(99, 179, 237, 0.6)';
+    atkBtn.style.color = 'var(--color-accent)';
+    atkBtn.style.borderRadius = '6px';
+    atkBtn.style.cursor = 'pointer';
+    atkBtn.style.fontWeight = '500';
+    atkBtn.style.transition = 'all 0.3s ease-out';
+    modeContainer.appendChild(atkBtn);
+
+    const dmgBtn = document.createElement('button');
+    dmgBtn.className = 'mode-btn mode-damage';
+    dmgBtn.textContent = '🛡️ My Damage';
+    dmgBtn.style.padding = '10px 16px';
+    dmgBtn.style.background = 'rgba(72, 187, 237, 0.15)';
+    dmgBtn.style.border = '1.5px solid rgba(72, 187, 237, 0.3)';
+    dmgBtn.style.color = 'var(--color-text-muted)';
+    dmgBtn.style.borderRadius = '6px';
+    dmgBtn.style.cursor = 'pointer';
+    dmgBtn.style.fontWeight = '500';
+    dmgBtn.style.transition = 'all 0.3s ease-out';
+    modeContainer.appendChild(dmgBtn);
+
+    damageCalcContainer.appendChild(modeContainer);
+
+    // Character inputs section (only visible in damage mode)
+    const charInputsSection = document.createElement('div');
+    charInputsSection.className = 'character-inputs-section';
+    charInputsSection.id = 'char-inputs-section';
+    charInputsSection.style.display = 'none';
+
+    const charTitle = document.createElement('p');
+    charTitle.textContent = 'Your character';
+    charTitle.style.margin = '0 0 12px 0';
+    charTitle.style.color = 'var(--color-text-muted)';
+    charTitle.style.fontSize = '0.8rem';
+    charTitle.style.textTransform = 'uppercase';
+    charTitle.style.letterSpacing = '0.5px';
+    charTitle.style.fontWeight = '600';
+    charInputsSection.appendChild(charTitle);
+
+    const charInputsGrid = document.createElement('div');
+    charInputsGrid.style.display = 'grid';
+    charInputsGrid.style.gridTemplateColumns = 'repeat(auto-fit, minmax(180px, 1fr))';
+    charInputsGrid.style.gap = '15px';
+
+    const characterInputs = [
+        { id: 'char_type', label: 'Type', type: 'select', options: ['STR', 'TEQ', 'INT', 'PHY', 'AGL'], default: 'STR' },
+        { id: 'char_class', label: 'Class', type: 'select', options: ['Super', 'Extreme'], default: 'Super' },
+        { id: 'char_defense', label: 'DEF', type: 'number', min: 0, max: Infinity, default: 0, step: 1 },
+        { id: 'char_damage_reduction', label: 'Damage Reduction (%)', type: 'number', min: 0, max: 100, default: 0, step: 1 },
+        { id: 'char_type_def_boost', label: 'Type DEF Boost Lv', type: 'number', min: 0, max: 50, default: 0, step: 1 },
+        { id: 'char_stacked_def', label: 'Stacked DEF (%)', tooltip: 'This value is relevant only for def-lowering bosses and includes these special attack effects: "Raises DEF by X%", "Raises allies\' DEF by X%" (this one can come from allies too).', type: 'number', min: 0, max: Infinity, default: 0, step: 1 },
+        { id: 'char_passive_guard', label: 'Passive Guard', type: 'checkbox', default: false },
+    ];
+
+    // Helper to read a stored session value for a character input
+    const getStoredCharValue = (inputId, fallback) => {
+        const stored = sessionStorage.getItem('charInput_' + inputId);
+        if (stored === null) return fallback;
+        if (stored === '__true__') return true;
+        if (stored === '__false__') return false;
+        return stored;
+    };
+
+    characterInputs.forEach(input => {
+        const inputGroup = document.createElement('div');
+        inputGroup.style.display = 'flex';
+        inputGroup.style.flexDirection = 'column';
+        inputGroup.style.gap = '6px';
+
+        const label = document.createElement('label');
+        label.textContent = input.label;
+        label.style.fontSize = '0.8rem';
+        label.style.color = 'var(--color-text-muted)';
+        label.style.fontWeight = '500';
+
+        // Styled custom tooltip (replaces native title attribute)
+        if (input.tooltip) {
+            const tipWrap = document.createElement('span');
+            tipWrap.style.position = 'relative';
+            tipWrap.style.display = 'inline-flex';
+            tipWrap.style.alignItems = 'center';
+            tipWrap.style.marginLeft = '4px';
+
+            const helpIcon = document.createElement('span');
+            helpIcon.textContent = '\u24D8';
+            helpIcon.style.cursor = 'help';
+            helpIcon.style.color = 'var(--color-accent)';
+            helpIcon.style.fontSize = '0.8rem';
+            helpIcon.style.lineHeight = '1';
+            helpIcon.style.userSelect = 'none';
+
+            const tipBox = document.createElement('span');
+            tipBox.textContent = input.tooltip;
+            tipBox.style.cssText = [
+                'position:absolute',
+                'bottom:calc(100% + 6px)',
+                'left:50%',
+                'transform:translateX(-50%)',
+                'width:240px',
+                'background:#1a202c',
+                'color:#e2e8f0',
+                'font-size:0.75rem',
+                'line-height:1.5',
+                'padding:8px 10px',
+                'border-radius:6px',
+                'border:1px solid rgba(99,179,237,0.25)',
+                'box-shadow:0 4px 12px rgba(0,0,0,0.5)',
+                'pointer-events:none',
+                'opacity:0',
+                'transition:opacity 0.15s',
+                'z-index:100',
+                'white-space:normal',
+                'text-align:left',
+                'font-weight:400',
+                'letter-spacing:normal',
+            ].join(';');
+
+            helpIcon.addEventListener('mouseenter', () => { tipBox.style.opacity = '1'; });
+            helpIcon.addEventListener('mouseleave', () => { tipBox.style.opacity = '0'; });
+
+            tipWrap.appendChild(helpIcon);
+            tipWrap.appendChild(tipBox);
+            label.appendChild(tipWrap);
+        }
+        label.style.letterSpacing = '0.2px';
+
+        let inputElement;
+        const inputId = input.id;
+
+        if (input.type === 'select') {
+            inputElement = document.createElement('select');
+            inputElement.id = inputId;
+            inputElement.style.padding = '10px';
+            inputElement.style.backgroundColor = 'var(--color-bg)';
+            inputElement.style.border = '1px solid var(--color-border)';
+            inputElement.style.borderRadius = '6px';
+            inputElement.style.color = 'var(--color-text)';
+            inputElement.style.fontFamily = 'inherit';
+            inputElement.style.fontSize = '0.9rem';
+            inputElement.style.cursor = 'pointer';
+
+            input.options.forEach(opt => {
+                const optEl = document.createElement('option');
+                optEl.value = opt;
+                optEl.textContent = opt;
+                inputElement.appendChild(optEl);
+            });
+            inputElement.value = getStoredCharValue(inputId, input.default);
+
+            inputGroup.appendChild(label);
+            inputGroup.appendChild(inputElement);
+        } else if (input.type === 'checkbox') {
+            // Styled toggle pill for passive guard
+            inputGroup.style.flexDirection = 'row';
+            inputGroup.style.alignItems = 'center';
+            inputGroup.style.gap = '10px';
+            inputGroup.style.gridColumn = 'auto';
+            inputGroup.style.padding = '8px 12px';
+            inputGroup.style.backgroundColor = 'rgba(99, 179, 237, 0.05)';
+            inputGroup.style.border = '1px solid rgba(99, 179, 237, 0.2)';
+            inputGroup.style.borderRadius = '8px';
+            inputGroup.style.cursor = 'pointer';
+
+            const storedChecked = getStoredCharValue(inputId, input.default);
+            const isChecked = storedChecked === true || storedChecked === 'true' || storedChecked === '__true__';
+
+            // Hidden real checkbox (for value reading)
+            inputElement = document.createElement('input');
+            inputElement.type = 'checkbox';
+            inputElement.id = inputId;
+            inputElement.checked = isChecked;
+            inputElement.style.position = 'absolute';
+            inputElement.style.opacity = '0';
+            inputElement.style.pointerEvents = 'none';
+            inputElement.style.width = '0';
+            inputElement.style.height = '0';
+
+            // Visual toggle track
+            const toggleTrack = document.createElement('div');
+            toggleTrack.className = 'char-toggle-track';
+            toggleTrack.style.flexShrink = '0';
+            toggleTrack.style.width = '40px';
+            toggleTrack.style.height = '22px';
+            toggleTrack.style.borderRadius = '11px';
+            toggleTrack.style.border = '1.5px solid rgba(99, 179, 237, 0.5)';
+            toggleTrack.style.backgroundColor = isChecked ? 'rgba(99, 179, 237, 0.6)' : 'rgba(45, 55, 72, 0.8)';
+            toggleTrack.style.position = 'relative';
+            toggleTrack.style.transition = 'background-color 0.2s ease';
+            toggleTrack.style.cursor = 'pointer';
+
+            const toggleThumb = document.createElement('div');
+            toggleThumb.style.position = 'absolute';
+            toggleThumb.style.top = '2px';
+            toggleThumb.style.left = isChecked ? '18px' : '2px';
+            toggleThumb.style.width = '16px';
+            toggleThumb.style.height = '16px';
+            toggleThumb.style.borderRadius = '50%';
+            toggleThumb.style.backgroundColor = isChecked ? '#63b3ed' : '#a0aec0';
+            toggleThumb.style.transition = 'left 0.2s ease, background-color 0.2s ease';
+            toggleTrack.appendChild(toggleThumb);
+
+            // Label text
+            label.style.textTransform = 'none';
+            label.style.letterSpacing = 'normal';
+            label.style.margin = '0';
+            label.style.cursor = 'pointer';
+            label.style.userSelect = 'none';
+            label.style.fontSize = '0.9rem';
+            label.style.color = isChecked ? 'var(--color-accent)' : 'var(--color-text-muted)';
+            label.style.fontWeight = isChecked ? '600' : '500';
+            label.style.transition = 'color 0.2s ease, font-weight 0.2s ease';
+            label.htmlFor = inputId;
+
+            const updateToggle = (checked) => {
+                inputElement.checked = checked;
+                toggleTrack.style.backgroundColor = checked ? 'rgba(99, 179, 237, 0.6)' : 'rgba(45, 55, 72, 0.8)';
+                toggleThumb.style.left = checked ? '18px' : '2px';
+                toggleThumb.style.backgroundColor = checked ? '#63b3ed' : '#a0aec0';
+                label.style.color = checked ? 'var(--color-accent)' : 'var(--color-text-muted)';
+                label.style.fontWeight = checked ? '600' : '500';
+                inputGroup.style.backgroundColor = checked ? 'rgba(99, 179, 237, 0.12)' : 'rgba(99, 179, 237, 0.05)';
+                inputGroup.style.borderColor = checked ? 'rgba(99, 179, 237, 0.45)' : 'rgba(99, 179, 237, 0.2)';
+            };
+
+            inputGroup.addEventListener('click', () => {
+                updateToggle(!inputElement.checked);
+                inputElement.dispatchEvent(new Event('change', { bubbles: true }));
+            });
+
+            inputGroup.appendChild(inputElement);
+            inputGroup.appendChild(toggleTrack);
+            inputGroup.appendChild(label);
+
+            charInputsGrid.appendChild(inputGroup);
+            return; // already appended
+        } else {
+            inputElement = document.createElement('input');
+            inputElement.type = input.type;
+            inputElement.id = inputId;
+            inputElement.placeholder = input.default;
+            inputElement.min = input.min;
+            inputElement.max = input.max;
+            inputElement.step = input.step || 1;
+            // Restore session value
+            const storedVal = getStoredCharValue(inputId, null);
+            if (storedVal !== null && storedVal !== input.default.toString()) {
+                inputElement.value = storedVal;
+            }
+            inputElement.style.padding = '10px';
+            inputElement.style.backgroundColor = 'var(--color-bg)';
+            inputElement.style.border = '1px solid var(--color-border)';
+            inputElement.style.borderRadius = '6px';
+            inputElement.style.color = 'var(--color-text)';
+            inputElement.style.fontFamily = 'inherit';
+            inputElement.style.fontSize = '0.9rem';
+            // Remove spinners for numeric inputs
+            inputElement.style.MozAppearance = 'textfield';
+
+            inputGroup.appendChild(label);
+            inputGroup.appendChild(inputElement);
+        }
+
+        charInputsGrid.appendChild(inputGroup);
+    });
+
+    charInputsSection.appendChild(charInputsGrid);
+
+    // DEF note — always visible in damage mode
+    const defNote = document.createElement('p');
+    defNote.style.cssText = 'margin:12px 0 0 0;font-size:0.75rem;color:var(--color-text-muted);line-height:1.5;';
+    defNote.innerHTML = '\u24D8 The defense shown in battle is not always accurate. Calculate yours at <a href="https://dokkanstats.com/en/defcalculator/" target="_blank" rel="noopener noreferrer" style="color:var(--color-accent);text-decoration:underline">dokkanstats.com</a>.';
+    charInputsSection.appendChild(defNote);
+
+    damageCalcContainer.appendChild(charInputsSection);
+
+    // Damage results section — start hidden, revealed by displayDamageResults once results exist
+    const damageResultsSection = document.createElement('div');
+    damageResultsSection.className = 'phase-damage-results';
+    damageResultsSection.id = 'damage-results-section';
+    damageResultsSection.style.display = 'none';
+    damageResultsSection.style.marginTop = '32px';
+    damageResultsSection.style.paddingTop = '24px';
+    damageResultsSection.style.borderTop = '1px solid rgba(99, 179, 237, 0.15)';
+
+    const damageTitle = document.createElement('p');
+    damageTitle.textContent = 'Damage you\'ll take';
+    damageTitle.style.margin = '0 0 16px 0';
+    damageTitle.style.color = 'var(--color-text-muted)';
+    damageTitle.style.fontSize = '0.8rem';
+    damageTitle.style.textTransform = 'uppercase';
+    damageTitle.style.letterSpacing = '0.5px';
+    damageTitle.style.fontWeight = '600';
+    damageResultsSection.appendChild(damageTitle);
+
+    container.appendChild(damageCalcContainer);
+    // damageResultsSection is returned and appended by the caller, after enemy forms
+
+    // Store direct refs so calculator functions can reach these elements
+    // even before performPageTransition adds the page to the document.
+    AppConfig.currentDamageResultsSection = damageResultsSection;
+    AppConfig.currentCharInputsSection = charInputsSection;
+
+    // Helper to apply ATK mode visual state
+    const applyAtkStyle = () => {
+        atkBtn.style.background = 'rgba(99, 179, 237, 0.3)';
+        atkBtn.style.borderColor = 'rgba(99, 179, 237, 0.6)';
+        atkBtn.style.color = 'var(--color-accent)';
+        atkBtn.classList.add('active');
+        dmgBtn.style.background = 'rgba(72, 187, 237, 0.15)';
+        dmgBtn.style.borderColor = 'rgba(72, 187, 237, 0.3)';
+        dmgBtn.style.color = 'var(--color-text-muted)';
+        dmgBtn.classList.remove('active');
+    };
+
+    // Helper to apply Damage mode visual state
+    const applyDmgStyle = () => {
+        dmgBtn.style.background = 'rgba(72, 187, 237, 0.3)';
+        dmgBtn.style.borderColor = 'rgba(72, 187, 237, 0.6)';
+        dmgBtn.style.color = 'var(--color-accent)';
+        dmgBtn.classList.add('active');
+        atkBtn.style.background = 'rgba(99, 179, 237, 0.15)';
+        atkBtn.style.borderColor = 'rgba(99, 179, 237, 0.3)';
+        atkBtn.style.color = 'var(--color-text-muted)';
+        atkBtn.classList.remove('active');
+    };
+
+    // Mode switching logic - START IN ATK MODE
+    AppConfig.setMode('atk');
+    charInputsSection.style.display = 'none';
+    applyAtkStyle();
+
+    atkBtn.addEventListener('click', () => {
+        if (AppConfig.getMode() === 'atk') return;
+        AppConfig.setMode('atk');
+        charInputsSection.style.display = 'none';
+        damageResultsSection.style.display = 'none';
+        applyAtkStyle();
+
+        const formsContainer = document.getElementById('enemy-forms-container') || document.querySelector('#enemy-forms-container');
+        if (formsContainer) {
+            formsContainer.style.display = ''; // restore CSS flex layout
+            formsContainer.querySelectorAll('.results-card').forEach(card => card.style.display = 'block');
+            formsContainer.querySelectorAll('[id^="enemy-form-"]').forEach(enemyForm => {
+                const enemy = findEnemyById(enemyForm.id.replace('enemy-form-', ''));
+                if (enemy) calculateATK(enemy, enemyForm);
+            });
+        }
+
+        if (onModeChange) onModeChange('atk');
+    });
+
+    dmgBtn.addEventListener('click', () => {
+        if (AppConfig.getMode() === 'damage') return;
+        AppConfig.setMode('damage');
+        charInputsSection.style.display = 'block';
+        damageResultsSection.style.display = 'block';
+        applyDmgStyle();
+
+        const formsContainer = document.getElementById('enemy-forms-container');
+        if (formsContainer) {
+            formsContainer.style.display = 'none'; // hide enemy forms — not needed in damage mode
+            formsContainer.querySelectorAll('[id^="enemy-form-"]').forEach(enemyForm => {
+                const enemy = findEnemyById(enemyForm.id.replace('enemy-form-', ''));
+                if (enemy) calculateDamage(enemy);
+            });
+        }
+
+        if (onModeChange) onModeChange('damage');
+    });
+
+    return { damageCalcContainer, charInputsSection, damageResultsSection };
+}
+
+/**
+ * Format results for clipboard copying with input conditions
+ * @param {Object} enemy - Enemy data
+ * @param {HTMLElement} resultsValuesContainer - Container with result values
+ * @param {Object} inputs - Input values used for calculation
+ * @returns {string} Formatted results text
+ */
+function formatResultsForClipboard(enemy, resultsValuesContainer, inputs) {
+    const lines = [];
+    lines.push('═══════════════════════════════════');
+    lines.push(`  ${enemy.name}`);
+    lines.push('═══════════════════════════════════');
+    lines.push('');
+    
+    // Add input conditions with better formatting
+    if (enemy.inputs && Array.isArray(enemy.inputs) && enemy.inputs.length > 0) {
+        lines.push('📋 CONDITIONS USED:');
+        for (const input of enemy.inputs) {
+            const value = inputs[input.id];
+            if (value !== null && value !== undefined) {
+                if (typeof value === 'boolean') {
+                    lines.push(`   • ${input.label}: ${value ? '✓ Yes' : '✗ No'}`);
+                } else {
+                    lines.push(`   • ${input.label}: ${value}`);
+                }
+            }
+        }
+        lines.push('');
+    }
+    
+    lines.push('💥 ATTACK RESULTS:');
+    
+    // Extract values from the results card
+    const resultItems = resultsValuesContainer.querySelectorAll('.result-value');
+    resultItems.forEach(item => {
+        const label = item.querySelector('.result-value-label')?.textContent || '';
+        const amount = item.querySelector('.result-value-amount')?.textContent || '0';
+        if (label) {
+            lines.push(`   • ${label}: ${amount}`);
+        }
+    });
+    
+    lines.push('');
+    lines.push('═══════════════════════════════════');
+    lines.push('📊 Dokkan Battle ATK Calculator');
+    lines.push('💻 dokkan-battle-atk-calculator.netlify.app');
+    lines.push('═══════════════════════════════════');
+    
+    return lines.join('\n');
 }
 
 /**
@@ -648,26 +1408,80 @@ function createInputField(enemy, input) {
     formGroup.className = 'form-group';
 
     if (input.type === 'checkbox') {
-        // Checkbox input with label above
-        const checkboxContainer = document.createElement('div');
-        checkboxContainer.className = 'checkbox-container';
+        // Toggle-style checkbox for enemy-specific boolean inputs
+        const toggleRow = document.createElement('div');
+        toggleRow.style.display = 'flex';
+        toggleRow.style.alignItems = 'center';
+        toggleRow.style.gap = '10px';
+        toggleRow.style.padding = '8px 10px';
+        toggleRow.style.backgroundColor = 'rgba(99, 179, 237, 0.05)';
+        toggleRow.style.border = '1px solid rgba(99, 179, 237, 0.15)';
+        toggleRow.style.borderRadius = '8px';
+        toggleRow.style.cursor = 'pointer';
+        toggleRow.style.width = '100%';
 
-        const textLabel = document.createElement('span');
-        textLabel.className = 'checkbox-text';
-        textLabel.textContent = input.label;
+        const isChecked = input.default || false;
 
-        const checkboxInput = document.createElement('input');
-        checkboxInput.type = 'checkbox';
-        checkboxInput.id = AppConfig.idPatterns.input(enemy.id, input.id);
-        checkboxInput.checked = input.default || false;
+        const hiddenCheck = document.createElement('input');
+        hiddenCheck.type = 'checkbox';
+        hiddenCheck.id = AppConfig.idPatterns.input(enemy.id, input.id);
+        hiddenCheck.checked = isChecked;
+        hiddenCheck.style.position = 'absolute';
+        hiddenCheck.style.opacity = '0';
+        hiddenCheck.style.pointerEvents = 'none';
+        hiddenCheck.style.width = '0';
+        hiddenCheck.style.height = '0';
 
-        checkboxInput.addEventListener('change', function () {
-            calculateATK(enemy);
+        const track = document.createElement('div');
+        track.style.flexShrink = '0';
+        track.style.width = '36px';
+        track.style.height = '20px';
+        track.style.borderRadius = '10px';
+        track.style.border = '1.5px solid rgba(99, 179, 237, 0.5)';
+        track.style.backgroundColor = isChecked ? 'rgba(99, 179, 237, 0.6)' : 'rgba(45, 55, 72, 0.8)';
+        track.style.position = 'relative';
+        track.style.transition = 'background-color 0.2s';
+
+        const thumb = document.createElement('div');
+        thumb.style.position = 'absolute';
+        thumb.style.top = '2px';
+        thumb.style.left = isChecked ? '16px' : '2px';
+        thumb.style.width = '14px';
+        thumb.style.height = '14px';
+        thumb.style.borderRadius = '50%';
+        thumb.style.backgroundColor = isChecked ? '#63b3ed' : '#a0aec0';
+        thumb.style.transition = 'left 0.2s, background-color 0.2s';
+        track.appendChild(thumb);
+
+        const toggleLabel = document.createElement('span');
+        toggleLabel.textContent = input.label;
+        toggleLabel.style.fontSize = '0.85rem';
+        toggleLabel.style.color = isChecked ? 'var(--color-text)' : 'var(--color-text-muted)';
+        toggleLabel.style.userSelect = 'none';
+        toggleLabel.style.lineHeight = '1.3';
+        toggleLabel.style.transition = 'color 0.2s';
+
+        const updateToggle = (checked) => {
+            hiddenCheck.checked = checked;
+            track.style.backgroundColor = checked ? 'rgba(99, 179, 237, 0.6)' : 'rgba(45, 55, 72, 0.8)';
+            thumb.style.left = checked ? '16px' : '2px';
+            thumb.style.backgroundColor = checked ? '#63b3ed' : '#a0aec0';
+            toggleLabel.style.color = checked ? 'var(--color-text)' : 'var(--color-text-muted)';
+            toggleRow.style.backgroundColor = checked ? 'rgba(99, 179, 237, 0.1)' : 'rgba(99, 179, 237, 0.05)';
+            toggleRow.style.borderColor = checked ? 'rgba(99, 179, 237, 0.35)' : 'rgba(99, 179, 237, 0.15)';
+        };
+
+        toggleRow.addEventListener('click', () => {
+            updateToggle(!hiddenCheck.checked);
+            hiddenCheck.dispatchEvent(new Event('change', { bubbles: true }));
         });
 
-        checkboxContainer.appendChild(textLabel);
-        checkboxContainer.appendChild(checkboxInput);
-        formGroup.appendChild(checkboxContainer);
+        hiddenCheck.addEventListener('change', () => calculateATK(enemy));
+
+        toggleRow.appendChild(hiddenCheck);
+        toggleRow.appendChild(track);
+        toggleRow.appendChild(toggleLabel);
+        formGroup.appendChild(toggleRow);
     } else {
         // Text/number input with label
         const label = document.createElement('label');

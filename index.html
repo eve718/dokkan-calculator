@@ -4,11 +4,11 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Dokkan Battle Boss ATK Calculator – Event Enemy Damage Calculator</title>
+    <title>Dokkan Battle Enemy Calculator – Boss ATK &amp; Damage You Take</title>
     <meta name="description"
-        content="Free Dokkan Battle enemy ATK calculator. Calculate boss attack damage across all events and phases with in-depth breakdowns for normal attacks, AOEs, super attacks, critical hits, and DEF ignore mechanics.">
+        content="Free Dokkan Battle calculator: look up enemy ATK values for any boss, then switch to My Damage mode to calculate how much damage your character will take — based on your DEF, type, class, damage reduction, and passive guard.">
     <meta name="keywords"
-        content="dokkan battle calculator, dokkan boss calculator, dokkan enemy damage, dobkan atk calculator, boss attack damage, dokkan events, dbz dokkan, super attack damage">
+        content="dokkan battle calculator, dokkan boss calculator, dokkan enemy damage, dokkan atk calculator, dokkan damage taken, boss attack damage, dokkan events, dbz dokkan, damage reduction calculator">
     <meta name="author" content="Eve">
     <meta name="robots" content="index, follow, max-snippet:-1, max-image-preview:large, max-video-preview:-1">
     <meta name="theme-color" content="#1a202c">
@@ -17,10 +17,10 @@
     <link rel="canonical" href="https://dokkan-battle-atk-calculator.netlify.app/">
 
     <!-- Open Graph -->
-    <meta property="og:site_name" content="Dokkan Boss ATK Calculator">
-    <meta property="og:title" content="Dokkan Battle Boss ATK Calculator – Event Enemy Damage Calculator">
+    <meta property="og:site_name" content="Dokkan Battle ATK Calculator">
+    <meta property="og:title" content="Dokkan Battle Enemy Calculator – Boss ATK &amp; Damage You Take">
     <meta property="og:description"
-        content="Free Dokkan Battle enemy ATK calculator. Calculate boss attack damage across all events with in-depth breakdowns for normal attacks, supers, AOEs, crit, and DEF ignore.">
+        content="Two modes in one: look up enemy ATK values for any boss, then calculate exactly how much damage your character will take based on your DEF, type, class, damage reduction, and passive guard. Share results for help.">
     <meta property="og:image"
         content="https://dokkan-battle-atk-calculator.netlify.app/images/og-image.jpg">
     <meta property="og:image:width" content="1200">
@@ -32,9 +32,9 @@
 
     <!-- Twitter Card -->
     <meta name="twitter:card" content="summary_large_image">
-    <meta name="twitter:title" content="Dokkan Battle Boss ATK Calculator – Event Enemy Damage Calculator">
+    <meta name="twitter:title" content="Dokkan Battle Enemy Calculator – Boss ATK &amp; Damage You Take">
     <meta name="twitter:description"
-        content="Free Dokkan Battle enemy ATK calculator. Calculate boss attack damage across all events with normal attacks, supers, AOEs, crit, and DEF ignore mechanics.">
+        content="Look up any boss's ATK values, then switch to My Damage mode to see exactly how much your character will take — DEF, type matchup, damage reduction, and passive guard all factored in.">
     <meta name="twitter:image"
         content="https://dokkan-battle-atk-calculator.netlify.app/images/og-image.jpg">
     <meta name="twitter:image:alt" content="Dokkan Battle ATK Calculator – event grid showing supported events">
@@ -44,8 +44,8 @@
     {
       "@context": "https://schema.org",
       "@type": "WebApplication",
-      "name": "Dokkan Battle Boss ATK Calculator",
-      "description": "Free Dokkan Battle enemy ATK calculator. Calculate boss attack damage across all events and phases with in-depth breakdowns for normal attacks, supers, AOEs, crit, and DEF ignore.",
+      "name": "Dokkan Battle Enemy Calculator",
+      "description": "Free Dokkan Battle calculator with two modes: Enemy ATK (look up boss attack values for any fight scenario) and My Damage (calculate how much damage your character will actually take, based on DEF, type, class, damage reduction, and passive guard).",
       "url": "https://dokkan-battle-atk-calculator.netlify.app/",
       "applicationCategory": "GameApplication",
       "operatingSystem": "Web",
@@ -89,8 +89,8 @@
 
     <header role="banner">
         <div class="header-inner">
-            <h1>Dokkan Battle Boss ATK Calculator</h1>
-            <p class="header-tagline">Calculate enemy attack damage across all events and phases</p>
+            <h1>Dokkan Battle Enemy Calculator</h1>
+            <p class="header-tagline">Look up boss ATK values. Switch to My Damage to see exactly how hard you'll get hit.</p>
         </div>
     </header>
 
@@ -118,12 +118,17 @@
         </div>
     </footer>
 
+    <!-- Image export library -->
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/html2canvas/1.4.1/html2canvas.min.js"></script>
+
     <!-- Global configuration must load first -->
     <script src="js/config.js"></script>
+    <!-- Utilities module with shared functionality -->
+    <script src="js/utilities.js"></script>
     <!-- Data and formulas must load before navigation/calculator -->
-    <!-- Use obfuscated production bundles when available -->
-    <script src="dist/data-obfuscated.js"></script>
-    <script src="dist/formulas-obfuscated.js"></script>
+    <script src="js/data.js"></script>
+    <script src="js/formulas.js"></script>
+    <script src="js/damage-formulas.js"></script>
     <!-- UI and calculation logic -->
     <script src="js/navigation.js"></script>
     <script src="js/calculator.js"></script>

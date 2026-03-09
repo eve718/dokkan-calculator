@@ -1,7 +1,7 @@
 {
   "name": "dokkan-calculator",
   "version": "1.0.0",
-  "description": "Dokkan Battle ATK Calculator",
+  "description": "Free Dokkan Battle ATK calculator for players - predict enemy attack damage during fights",
   "scripts": {
     "new-entry": "node scripts/new-entry.js",
     "generate-og-image": "node scripts/generate-og-image.js",
@@ -13,6 +13,7 @@
   },
   "devDependencies": {
     "javascript-obfuscator": "^4.0.0",
-    "jimp": "^1.6.0"
+    "jimp": "^1.6.0",
+    "sharp": "^0.34.5"
   }
 }

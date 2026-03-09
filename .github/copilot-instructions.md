@@ -1,5 +1,6 @@
 Project orientation
-- **Purpose:** Single-page Dokkan Battle ATK calculator. Data-driven UI renders events → stages → battles → phases → enemies.
+- **Purpose:** Single-page calculator for Dokkan Battle players to predict enemy attack damage during fights. Players navigate to their phase, input their fight scenario, and instantly see damage predictions. Results can be copied/shared with other players for help, downloaded as images, and favorite phases are saved for quick revisit.
+- **Use-case:** Player is fighting a boss → unsure about incoming damage → uses calculator to check → shares results with stronger players for advice
 - **Files to inspect first:** `package.json`, `index.html`, `js/data.js`, `js/formulas.js`, `js/navigation.js`, `js/calculator.js`, `js/app.js`.
 
 How the app is structured

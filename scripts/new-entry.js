@@ -412,11 +412,13 @@ function formulaStub(enemy, eventName, battleName) {
     const needsStackSuper  = outputIds.has('normal_atk2') || outputIds.has('aoe_atk') || outputIds.has('aoe_atk2');
 
     // Input extraction lines (match actual formulas.js patterns)
-    const varLines = enemy.inputs.map(inp =>
-        inp.type === 'checkbox'
-            ? `        const ${inp.id} = inputs.${inp.id} || false;`
-            : `        const ${inp.id} = (inputs.${inp.id} !== undefined && inputs.${inp.id} !== null) ? inputs.${inp.id} : ${inp.default};`
-    );
+    const varLines = enemy.inputs.map(inp => {
+        if (inp.type === 'checkbox') {
+            return `        const ${inp.id} = inputs.${inp.id} || false;`;
+        }
+        const divisor = (inp.id === 'atk_debuff_passive' || inp.id === 'atk_debuff_super') ? ' / 100' : '';
+        return `        const ${inp.id} = (inputs.${inp.id} !== undefined && inputs.${inp.id} !== null) ? inputs.${inp.id}${divisor} : ${inp.default};`;
+    });
 
     // Constant declarations
     const constLines = [`        const baseAtk = 0; // TODO`];

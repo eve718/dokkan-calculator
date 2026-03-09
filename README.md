@@ -1,26 +1,29 @@
-# Dokkan Battle Boss ATK Calculator
+# Dokkan Battle Enemy ATK Calculator
 
-A free, accurate calculator for Dokkan Battle enemy/boss ATK stats. Select an event, stage, and enemy, then enter the relevant inputs to instantly calculate the boss's normal attack, AOE, and super attack ATK values across different phases and conditions.
+A free calculator for Dokkan Battle players to predict how much damage an enemy will deal during a fight. Navigate to the phase you're fighting, input your scenario (phase conditions, buffs, debuffs, etc.), and instantly see attack damage predictions. Copy results to share with other players for help, or download enemy images to use in discussions.
 
 **Live:** https://dokkan-battle-atk-calculator.netlify.app/
 
 ## Features
 
-- **Accurate ATK calculations** for all supported Dokkan Battle events and enemies
-- **Comprehensive attack breakdowns** showing normal attack, AOE, and super attack ATK stats
-- **In-depth condition modifiers** including phase conditions, buffs, and enemy-specific mechanics
-- **Real-time results** as you adjust inputs
-- **Event-specific formulas** for accurate ATK calculations across all phases
-- **Responsive design** that works on mobile and desktop
+- **Instant damage predictions** - Choose your fight scenario and see how hard the enemy hits
+- **Real-time calculations** - Adjust inputs and watch results update instantly
+- **Copy results** - Share your calculation with other players to ask for help
+- **Download enemy images** - Save and share enemy stats with the community
+- **Favorite phases** - Quick access to phases you fight frequently or plan to revisit
+- **Comprehensive breakdowns** - View normal attacks, super attacks, AOE damage, and more
+- **Works on mobile & desktop** - Calculate damage predictions anywhere
 
-## Quick Start
+## How to Use
 
 1. **Visit the site** at the link above
-2. **Choose an event** from the grid
-3. **Select a stage** and battle
-4. **Pick an enemy** and review its inputs
-5. **Enter the relevant values** (buffs, phase conditions, enemy-specific multipliers, etc.)
-6. **See instant results** for all ATK outputs (normal, AOE, super with crit/DEF ignore)
+2. **Select your event** from the grid
+3. **Navigate to your stage** and battle
+4. **Choose the phase** where you're fighting
+5. **Select the enemy** you're facing
+6. **Input your fight scenario** (current conditions, the enemy's state, any buffs/debuffs, etc.)
+7. **See the damage prediction** - Instant results for normal attacks, super attacks, and AOE attacks
+8. **Copy or download** to share with other players or save for reference
 
 ## Development
 
