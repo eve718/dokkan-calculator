@@ -28,15 +28,6 @@ const NavigationState = {
     }
 };
 
-// Debounce utility for search input
-function debounce(func, delay = 300) {
-    let timeoutId;
-    return function(...args) {
-        clearTimeout(timeoutId);
-        timeoutId = setTimeout(() => func(...args), delay);
-    };
-}
-
 // Helper function: search supports partial word matching
 // "goku d" matches "Goku & Dragon" because "goku" is in name AND word starts with "d"
 // "goku d" does NOT match "Super Saiyan God Goku" because no word starts with "d"
@@ -54,7 +45,6 @@ function searchMatches(name, searchTerms) {
     });
 }
 
-// State object properly initialized
 /**
  * Setup tooltip positioning for a card element
  * Uses CSS custom properties to position tooltip above card at viewport level
@@ -639,9 +629,6 @@ function showEnemiesPage(container, eventId, stageId, battleId) {
     const enemyFormsContainer = document.createElement('div');
     enemyFormsContainer.id = 'enemy-forms-container';
 
-    // Track currently selected phase
-    let currentSelectedPhase = battle.phases.length > 0 ? battle.phases[0] : null;
-
     // Create phase header container with tabs and buttons
     const phaseTabsContainer = document.createElement('div');
     phaseTabsContainer.className = 'phase-tabs-container';
@@ -672,11 +659,6 @@ function showEnemiesPage(container, eventId, stageId, battleId) {
                 tab.classList.add('active');
                 tab.setAttribute('aria-selected', 'true');
                 
-                // Update selected phase
-                currentSelectedPhase = phase;
-                
-
-
                 // Update content with smooth animation
                 const formsContainer = document.getElementById('enemy-forms-container');
                 
@@ -864,24 +846,6 @@ function createEnemyForm(container, enemy) {
 
     resultsCard.appendChild(resultsActions);
     enemyForm.appendChild(resultsCard);
-
-    // Create old results display section (for internal use, hidden visually)
-    const resultsContainer = document.createElement('div');
-    resultsContainer.className = 'results-container';
-    resultsContainer.style.display = 'none';
-    if (enemy.outputs && Array.isArray(enemy.outputs)) {
-        enemy.outputs.forEach(output => {
-            const resultDiv = document.createElement('div');
-            resultDiv.id = AppConfig.idPatterns.output(enemy.id, output.id);
-            resultDiv.className = 'result';
-            resultDiv.textContent = `${output.label || 'Result'}: 0`;
-            resultsContainer.appendChild(resultDiv);
-        });
-    }
-
-    if (resultsContainer.children.length > 0) {
-        enemyForm.appendChild(resultsContainer);
-    }
 
     container.appendChild(enemyForm);
     calculateATK(enemy, enemyForm);

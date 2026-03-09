@@ -11,7 +11,6 @@ const AppConfig = {
     pageTransitionDuration: 300,      // ms for fade in/out effects
     inputDebounceDelay: 500,          // ms to wait before validating input
     inputCorrectionDelay: 800,        // ms before auto-correcting invalid input
-    retryCheckDelay: 100,             // ms between retry attempts for DOM elements
 
     // ============ DOM SELECTORS & IDs ============
     // Primary container and content areas
@@ -70,13 +69,6 @@ const AppConfig = {
         emptyInputValue: 0,             // Default value when input is empty
     },
 
-    // ============ MESSAGE TIMEOUTS ============
-    // How long log messages should display (for future toast notifications)
-    notifications: {
-        errorDuration: 5000,            // ms to show error messages
-        successDuration: 2000,          // ms to show success messages
-    },
-
     // ============ VALIDATION METHODS ============
     /**
      * Safely retrieve an input element by enemy and input ID
@@ -86,17 +78,6 @@ const AppConfig = {
      */
     getInputElement: function(enemyId, inputId) {
         const elementId = this.idPatterns.input(enemyId, inputId);
-        return document.getElementById(elementId);
-    },
-
-    /**
-     * Safely retrieve an output element by enemy and output ID
-     * @param {string} enemyId
-     * @param {string} outputId
-     * @returns {HTMLElement|null}
-     */
-    getOutputElement: function(enemyId, outputId) {
-        const elementId = this.idPatterns.output(enemyId, outputId);
         return document.getElementById(elementId);
     },
 

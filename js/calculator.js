@@ -138,44 +138,6 @@ function calculateATK(enemy, enemyFormElement) {
 }
 
 /**
- * Create a missing result element and add it to the results container
- * Called when a result div doesn't exist yet but needs to be displayed
- * @param {Object} enemy - Enemy data object
- * @param {Object} output - Output definition
- * @param {number} value - The calculated value
- */
-function createResultElement(enemy, output, value) {
-    const enemyForm = document.getElementById(AppConfig.idPatterns.enemy(enemy.id));
-
-    if (!enemyForm) {
-        // Enemy form not yet in DOM - retry after delay
-        setTimeout(() => createResultElement(enemy, output, value), AppConfig.retryCheckDelay);
-        return;
-    }
-
-    const resultsContainer = enemyForm.querySelector('.results-container');
-    if (!resultsContainer) {
-        console.warn(`No results container found for enemy ${enemy.id}`);
-        return;
-    }
-
-    // Ensure the result div doesn't already exist
-    const existingElement = AppConfig.getOutputElement(enemy.id, output.id);
-    if (existingElement) {
-        // Element already exists, just update it
-        existingElement.textContent = `${output.label}: ${formatNumber(value)}`;
-        return;
-    }
-
-    // Create and add new result element
-    const resultDiv = document.createElement('div');
-    resultDiv.id = AppConfig.idPatterns.output(enemy.id, output.id);
-    resultDiv.className = 'result';
-    resultDiv.textContent = `${output.label}: ${formatNumber(value || 0)}`;
-    resultsContainer.appendChild(resultDiv);
-}
-
-/**
  * Validate and correct a single input value
  * Ensures value is within min/max bounds and updates the DOM
  * @param {HTMLElement} inputElement - Input field to validate
@@ -476,31 +438,6 @@ function extractDefIgnoreFromLabel(label) {
 function extractDefLowerFromLabel(label) {
     const match = (label || '').match(/lowers?\s+(\d+)%\s*(?:stacked\s+)?def/i);
     return match ? parseInt(match[1], 10) : 0;
-}
-
-/**
- * Find the phase that contains a specific enemy
- * @param {string} enemyId - The enemy ID to search for
- * @returns {Object|null} Phase object or null if not found
- */
-function findPhaseByEnemyId(enemyId) {
-    if (!gameData || !gameData.events) return null;
-    
-    for (const event of gameData.events) {
-        if (!event.stages) continue;
-        for (const stage of event.stages) {
-            if (!stage.battles) continue;
-            for (const battle of stage.battles) {
-                if (!battle.phases) continue;
-                for (const phase of battle.phases) {
-                    if (!phase.enemies) continue;
-                    const foundEnemy = phase.enemies.find(e => e.id === enemyId);
-                    if (foundEnemy) return phase;
-                }
-            }
-        }
-    }
-    return null;
 }
 
 /**
