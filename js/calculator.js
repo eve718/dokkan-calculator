@@ -566,3 +566,169 @@ function findEnemyById(enemyId) {
     }
     return null;
 }
+
+// ─── Standalone Damage Calculator ─────────────────────────────────────────────
+
+/**
+ * Format a {min, max} damage range as a human-readable string.
+ * @param {{min: number|'DD', max: number|'DD'}} range
+ * @returns {string}
+ */
+function formatDmgRange(range) {
+    if (!range) return '—';
+    const { min, max } = range;
+    if (min === 'DD' && max === 'DD') return 'Double Digits';
+    if (min === 'DD') return `DD – ${formatNumber(max)}`;
+    if (min === max)  return formatNumber(min);
+    return `${formatNumber(min)} – ${formatNumber(max)}`;
+}
+
+/**
+ * Compute damage taken for all 10 enemy type/class combinations.
+ * Single ATK value (no normal vs super split).
+ * When isCrit=true the ATK is multiplied by 1.5 (DC-only rule).
+ *
+ * @param {{ enemy_atk, enemy_def_lower, enemy_crit, enemy_def_ignore }} enemyInputs
+ * @param {{ char_type, char_class, char_defense, char_stacked_def,
+ *           char_damage_reduction, char_type_def_boost, char_passive_guard }} charInputs
+ * @returns {Object} keyed by "TYPE_Class" e.g. "STR_Super"
+ *   Each value: { relation, atk: {min,max} }
+ */
+function calculateStandaloneDamage(enemyInputs, charInputs) {
+    const baseAtk      = enemyInputs.enemy_atk        || 0;
+    const defLowerPct  = enemyInputs.enemy_def_lower  || 0;
+    const isCrit       = !!enemyInputs.enemy_crit;
+    const defIgnorePct = isCrit ? (enemyInputs.enemy_def_ignore || 0) : 0;
+    // DC-only: critting enemy has 1.5× ATK
+    const atk          = isCrit ? baseAtk * 1.5 : baseAtk;
+
+    const baseDEF         = charInputs.char_defense          || 0;
+    const stackedDefPct   = charInputs.char_stacked_def      || 0;
+    const dmgReductionPct = charInputs.char_damage_reduction || 0;
+    const typeDefBoostLv  = charInputs.char_type_def_boost   || 0;
+    const passiveGuard    = !!charInputs.char_passive_guard;
+    const charType        = (charInputs.char_type  || 'STR').toUpperCase();
+    const charClass       = charInputs.char_class || 'Super';
+
+    const totalDEF  = baseDEF * (1 + stackedDefPct / 100);
+    // DEF lowering applies at all times in the DC (no super/normal distinction)
+    const effDEF    = defLowerPct > 0 ? totalDEF * (1 - defLowerPct / 100) : totalDEF;
+    const dmgMult   = 1 - dmgReductionPct / 100;
+
+    const TYPES   = ['STR', 'PHY', 'INT', 'TEQ', 'AGL'];
+    const CLASSES = ['Super', 'Extreme'];
+
+    const computeDmg = (atkVal, relation, sameClass) => {
+        const defAfterIgnore = effDEF * (1 - defIgnorePct / 100);
+        let dmg;
+        if (passiveGuard) {
+            let guardMulti = 0.80;
+            if (relation === 'disadvantage') guardMulti -= typeDefBoostLv * 0.01;
+            const defForGuard = isCrit ? defAfterIgnore : effDEF;
+            dmg = (atkVal * guardMulti * dmgMult - defForGuard) * 0.5;
+        } else if (isCrit) {
+            const typeMulti = relation === 'disadvantage'
+                ? (sameClass ? 0.90 - typeDefBoostLv * 0.01 : 1.00 - typeDefBoostLv * 0.01)
+                : 1.00;
+            dmg = atkVal * typeMulti * dmgMult - defAfterIgnore;
+        } else if (relation === 'disadvantage') {
+            const typeMulti = sameClass ? 0.90 : 1.00;
+            dmg = (atkVal * (typeMulti - typeDefBoostLv * 0.01) * dmgMult - effDEF) * 0.5;
+        } else {
+            const typeMulti = relation === 'advantage'
+                ? (sameClass ? 1.25 : 1.50)
+                : (sameClass ? 1.00 : 1.15);
+            dmg = atkVal * typeMulti * dmgMult - effDEF;
+        }
+        return dmg <= 0 ? 'DD' : Math.round(dmg);
+    };
+
+    const makeRange = (relation, sameClass) => ({
+        min: computeDmg(atk,        relation, sameClass),
+        max: computeDmg(atk * 1.03, relation, sameClass),
+    });
+
+    const results = {};
+    for (const enemyType of TYPES) {
+        for (const enemyClass of CLASSES) {
+            const relation  = getTypeRelation(enemyType, charType);
+            const sameClass = isSameClass(enemyClass, charClass);
+            const key       = enemyType + '_' + enemyClass;
+            results[key] = { relation, atk: makeRange(relation, sameClass) };
+        }
+    }
+    return results;
+}
+
+/**
+ * Render the standalone damage results table.
+ * Rows = enemy types (STR/PHY/INT/TEQ/AGL)
+ * Columns = enemy classes (Super / Extreme)
+ * @param {HTMLElement} container
+ * @param {Object}  results  - Output of calculateStandaloneDamage
+ * @param {boolean} isCrit
+ */
+function renderStandaloneDamageResults(container, results, isCrit) {
+    container.innerHTML = '';
+
+    const sectionLabel = document.createElement('p');
+    sectionLabel.className = 'dc-section-label';
+    sectionLabel.style.marginBottom = '14px';
+    sectionLabel.textContent = 'Damage Received';
+    container.appendChild(sectionLabel);
+
+    if (isCrit) {
+        const critNote = document.createElement('p');
+        critNote.style.cssText = 'font-size:0.75rem;color:var(--color-text-muted);margin-bottom:12px;line-height:1.5';
+        critNote.textContent = '\u24D8 Crit active: enemy ATK \u00D71.5, DEF ignored by ' + (results['STR_Super'] ? '' : '') + '% shown below.';
+        // Rewrite once we know the ignore pct — but it's already baked into the numbers.
+        critNote.textContent = '\u24D8 Crit active: enemy ATK \u00D71.5. DEF ignore already applied to values.';
+        container.appendChild(critNote);
+    }
+
+    // ── Grid layout: header row + 5 type rows, 3 columns (type label | Super | Extreme) ──
+    const TYPES   = ['STR', 'PHY', 'INT', 'TEQ', 'AGL'];
+    const CLASSES = ['Super', 'Extreme'];
+
+    // Header
+    const header = document.createElement('div');
+    header.className = 'dc-table-row dc-table-header';
+    ['Type', 'Super', 'Extreme'].forEach(text => {
+        const th = document.createElement('div');
+        th.className = 'dc-th';
+        th.textContent = text;
+        header.appendChild(th);
+    });
+    container.appendChild(header);
+
+    for (const enemyType of TYPES) {
+        // Use the Super relation to colour-code the row (same for both classes vs char type)
+        const superKey = enemyType + '_Super';
+        const superData = results[superKey];
+        const relation = superData ? superData.relation : 'neutral';
+
+        const row = document.createElement('div');
+        row.className = `dc-table-row dc-row-${relation}`;
+
+        // Type label cell
+        const typeCell = document.createElement('div');
+        typeCell.className = 'dc-td dc-td-type';
+        const badge = document.createElement('span');
+        badge.className = `dc-type-badge dc-type-${enemyType.toLowerCase()}`;
+        badge.textContent = enemyType;
+        typeCell.appendChild(badge);
+        row.appendChild(typeCell);
+
+        // One cell per class
+        for (const enemyClass of CLASSES) {
+            const key  = enemyType + '_' + enemyClass;
+            const data = results[key];
+            const cell = document.createElement('div');
+            cell.className = 'dc-td dc-td-dmg';
+            cell.textContent = data ? formatDmgRange(data.atk) : '—';
+            row.appendChild(cell);
+        }
+
+        container.appendChild(row);
+    }
+}

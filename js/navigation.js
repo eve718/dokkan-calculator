@@ -125,7 +125,7 @@ function isSingleBattleStage() {
  */
 function showPage(page, eventId = null, stageId = null, battleId = null) {
     // Validate page type
-    const validPages = ['events', 'stages', 'battles', 'enemies'];
+    const validPages = ['events', 'stages', 'battles', 'enemies', 'damage-calculator'];
     if (!validPages.includes(page)) {
         console.warn(`Invalid page type: ${page}. Defaulting to 'events'`);
         page = 'events';
@@ -165,6 +165,9 @@ function showPage(page, eventId = null, stageId = null, battleId = null) {
             break;
         case 'enemies':
             showEnemiesPage(newContent, eventId, stageId, battleId);
+            break;
+        case 'damage-calculator':
+            showDamageCalculatorPage(newContent);
             break;
     }
 
@@ -241,6 +244,12 @@ function updateBreadcrumb() {
 
     let html = '<a href="#" onclick="showPage(\'events\')">Home</a>';
 
+    if (currentPage === 'damage-calculator') {
+        html += ' &gt; Damage Calculator';
+        breadcrumbDiv.innerHTML = html;
+        return;
+    }
+
     // Add event link if not on home page
     if (currentPage !== 'events' && currentEventId) {
         const event = gameData.events?.find(e => e.id === currentEventId);
@@ -302,11 +311,40 @@ function escapeHtml(text) {
  * @param {HTMLElement} container - DOM element to render events into
  */
 function showEventsPage(container) {
+    // ── Tools section (above the Events title) ────────────────────────────────
+    const toolsSection = document.createElement('div');
+    toolsSection.className = 'tools-section';
+
+    const toolsSectionTitle = document.createElement('p');
+    toolsSectionTitle.className = 'tools-section-title';
+    toolsSectionTitle.textContent = 'Tools';
+    toolsSection.appendChild(toolsSectionTitle);
+
+    const dcToolCard = document.createElement('div');
+    dcToolCard.className = 'tool-card';
+    const dcIcon = document.createElement('div');
+    dcIcon.className = 'tool-card-icon';
+    dcIcon.textContent = '⚔️';
+    const dcInfo = document.createElement('div');
+    dcInfo.className = 'tool-card-info';
+    const dcName = document.createElement('div');
+    dcName.className = 'tool-card-name';
+    dcName.textContent = 'Damage Calculator';
+    const dcDesc = document.createElement('div');
+    dcDesc.className = 'tool-card-desc';
+    dcDesc.textContent = 'Enter any enemy ATK and your character stats to see exactly how much damage you take — for all type & class combinations.';
+    dcInfo.appendChild(dcName);
+    dcInfo.appendChild(dcDesc);
+    dcToolCard.appendChild(dcIcon);
+    dcToolCard.appendChild(dcInfo);
+    dcToolCard.addEventListener('click', () => showPage('damage-calculator'));
+    toolsSection.appendChild(dcToolCard);
+    container.appendChild(toolsSection);
+    // ──────────────────────────────────────────────────────────────────────────
+
     const title = document.createElement('h2');
     title.textContent = 'Events';
     container.appendChild(title);
-
-
 
     // Add search bar
     const searchWrapper = createSearchBar('Search events, stages, battles, or enemies...');
@@ -395,6 +433,437 @@ function createSearchBar(placeholder) {
     input.placeholder = placeholder;
     wrapper.appendChild(input);
     return wrapper;
+}
+
+/**
+ * Standalone Damage Calculator page.
+ * Lets the user enter any enemy ATK + character stats and see
+ * damage received for all 10 enemy type/class combinations.
+ * @param {HTMLElement} container
+ */
+function showDamageCalculatorPage(container) {
+    // --- Back button ---
+    const backBtn = document.createElement('button');
+    backBtn.className = 'back-button';
+    backBtn.textContent = '← Back to Events';
+    backBtn.addEventListener('click', () => showPage('events'));
+    container.appendChild(backBtn);
+
+    const title = document.createElement('h2');
+    title.textContent = 'Damage Calculator';
+    container.appendChild(title);
+
+    const desc = document.createElement('p');
+    desc.className = 'mode-info-banner mode-info-atk';
+    desc.style.marginBottom = '20px';
+    desc.textContent = "Enter the enemy's ATK and your character's stats to see how much damage you receive for every enemy type & class combination. All inputs are remembered for the current session.";
+    container.appendChild(desc);
+
+    // --- Session storage helpers ---
+    const getStoredEnemy = (key, fallback) => {
+        const v = sessionStorage.getItem('dcEnemy_' + key);
+        if (v === null) return fallback;
+        if (v === '__true__') return true;
+        if (v === '__false__') return false;
+        const n = Number(v);
+        return isNaN(n) ? fallback : n;
+    };
+    const setStoredEnemy = (key, val) => {
+        sessionStorage.setItem('dcEnemy_' + key, typeof val === 'boolean' ? (val ? '__true__' : '__false__') : String(val));
+    };
+
+    // --- Two-panel wrapper ---
+    const panels = document.createElement('div');
+    panels.className = 'dc-panels';
+    container.appendChild(panels);
+
+    // ── Enemy panel ────────────────────────────────────────────────────────────
+    const enemyPanel = document.createElement('div');
+    enemyPanel.className = 'dc-card';
+    panels.appendChild(enemyPanel);
+
+    const enemyCardTitle = document.createElement('p');
+    enemyCardTitle.className = 'dc-card-title';
+    enemyCardTitle.textContent = 'Enemy';
+    enemyPanel.appendChild(enemyCardTitle);
+
+    const enemyGrid = document.createElement('div');
+    enemyGrid.className = 'dc-enemy-grid';
+    enemyPanel.appendChild(enemyGrid);
+
+    // Helper: numeric input group with placeholder (invisible, used as default)
+    function makeNumGroup(id, labelText, storedVal, min, max, placeholder) {
+        const g = document.createElement('div');
+        g.className = 'dc-input-group';
+        const lbl = document.createElement('label');
+        lbl.htmlFor = id;
+        lbl.className = 'dc-input-label';
+        lbl.textContent = labelText;
+        g.appendChild(lbl);
+        const inp = document.createElement('input');
+        inp.type = 'number';
+        inp.id = id;
+        inp.min = min ?? 0;
+        if (max != null && isFinite(max)) inp.max = max;
+        inp.step = 1;
+        inp.placeholder = String(placeholder ?? 0);
+        // Only set .value if the user has previously saved something
+        if (storedVal !== null && storedVal !== undefined && storedVal !== 0) {
+            inp.value = storedVal;
+        }
+        inp.style.cssText = 'width:100%;padding:10px;background:var(--color-bg);border:1px solid var(--color-border);border-radius:6px;color:var(--color-text);font-family:inherit;font-size:0.9rem;-moz-appearance:textfield';
+        g.appendChild(inp);
+        return { g, inp };
+    }
+
+    // Helper: compact toggle pill for enemy inputs
+    function makeToggleGroup(id, labelText, storedVal) {
+        const isChecked = storedVal === true;
+        const g = document.createElement('div');
+        g.className = 'dc-input-group dc-check-group';
+        g.style.cssText = 'flex-direction:row;align-items:center;gap:8px;padding:6px 10px;background:' + (isChecked ? 'rgba(99,179,237,0.12)' : 'rgba(99,179,237,0.05)') + ';border:1px solid ' + (isChecked ? 'rgba(99,179,237,0.45)' : 'rgba(99,179,237,0.2)') + ';border-radius:8px;cursor:pointer';
+
+        // Hidden real checkbox
+        const inp = document.createElement('input');
+        inp.type = 'checkbox';
+        inp.id = id;
+        inp.checked = isChecked;
+        inp.style.cssText = 'position:absolute;opacity:0;pointer-events:none;width:0;height:0';
+
+        // Compact toggle track (32×18)
+        const track = document.createElement('div');
+        track.style.cssText = 'flex-shrink:0;width:32px;height:18px;border-radius:9px;border:1.5px solid rgba(99,179,237,0.5);background:' + (isChecked ? 'rgba(99,179,237,0.6)' : 'rgba(45,55,72,0.8)') + ';position:relative;transition:background 0.2s;cursor:pointer';
+        const thumb = document.createElement('div');
+        thumb.style.cssText = 'position:absolute;top:1px;left:' + (isChecked ? '13px' : '1px') + ';width:14px;height:14px;border-radius:50%;background:' + (isChecked ? '#63b3ed' : '#a0aec0') + ';transition:left 0.2s,background 0.2s';
+        track.appendChild(thumb);
+
+        const lbl = document.createElement('label');
+        lbl.htmlFor = id;
+        lbl.textContent = labelText;
+        lbl.style.cssText = 'margin:0;cursor:pointer;user-select:none;font-size:0.82rem;font-weight:' + (isChecked ? '600' : '500') + ';color:' + (isChecked ? 'var(--color-accent)' : 'var(--color-text-muted)') + ';transition:color 0.2s,font-weight 0.2s';
+
+        const update = (checked) => {
+            inp.checked = checked;
+            track.style.background = checked ? 'rgba(99,179,237,0.6)' : 'rgba(45,55,72,0.8)';
+            thumb.style.left = checked ? '13px' : '1px';
+            thumb.style.background = checked ? '#63b3ed' : '#a0aec0';
+            lbl.style.color = checked ? 'var(--color-accent)' : 'var(--color-text-muted)';
+            lbl.style.fontWeight = checked ? '600' : '500';
+            g.style.background = checked ? 'rgba(99,179,237,0.12)' : 'rgba(99,179,237,0.05)';
+            g.style.borderColor = checked ? 'rgba(99,179,237,0.45)' : 'rgba(99,179,237,0.2)';
+        };
+        g.addEventListener('click', () => {
+            update(!inp.checked);
+            inp.dispatchEvent(new Event('change', { bubbles: true }));
+        });
+
+        g.appendChild(inp);
+        g.appendChild(track);
+        g.appendChild(lbl);
+        return { g, inp };
+    }
+
+    const storedAtk       = getStoredEnemy('enemy_atk',       null);
+    const storedDefLower  = getStoredEnemy('enemy_def_lower',  null);
+    const storedDefIgnore = getStoredEnemy('enemy_def_ignore', null);
+    const storedCrit      = getStoredEnemy('enemy_crit',       false);
+
+    const { g: atkGroup,       inp: atkInput }       = makeNumGroup('dc_enemy_atk',      'ATK',              storedAtk,       0, Infinity, 0);
+    const { g: defLowerGroup,  inp: defLowerInput }  = makeNumGroup('dc_enemy_def_lower', 'DEF Lowering (%)', storedDefLower,  0, 100,      0);
+    const { g: defIgnoreGroup, inp: defIgnoreInput } = makeNumGroup('dc_enemy_def_ignore','DEF Ignored on Crit (%)', storedDefIgnore, 0, 100, 0);
+    const { g: critGroup,      inp: critInput }      = makeToggleGroup('dc_enemy_crit',   'Crits',            storedCrit);
+
+    // Crit toggle and DEF-ignore side-by-side in one grid row
+    const critRow = document.createElement('div');
+    critRow.style.cssText = 'grid-column:1/-1;display:flex;gap:10px;align-items:flex-end';
+    critRow.appendChild(critGroup);
+    critRow.appendChild(defIgnoreGroup);
+
+    [atkGroup, defLowerGroup, critRow].forEach(g => enemyGrid.appendChild(g));
+    [[atkInput, 'enemy_atk'], [defLowerInput, 'enemy_def_lower'], [defIgnoreInput, 'enemy_def_ignore']].forEach(([el, key]) => {
+        el.addEventListener('input', () => { setStoredEnemy(key, el.value); runCalculation(); });
+    });
+    critInput.addEventListener('change', () => {
+        setStoredEnemy('enemy_crit', critInput.checked);
+        runCalculation();
+    });
+
+    // ── Character panel ────────────────────────────────────────────────────────
+    const charPanel = document.createElement('div');
+    charPanel.className = 'dc-card';
+    panels.appendChild(charPanel);
+
+    const charCardTitle = document.createElement('p');
+    charCardTitle.className = 'dc-card-title';
+    charCardTitle.textContent = 'Your Character';
+    charPanel.appendChild(charCardTitle);
+
+    const charBanner = document.createElement('p');
+    charBanner.className = 'mode-info-banner mode-info-dmg';
+    charBanner.style.cssText = 'margin-bottom:14px;font-size:0.82rem;color:var(--color-text-muted);line-height:1.5;padding:10px 14px;background:rgba(72,187,237,0.07);border-radius:6px;border:1px solid rgba(72,187,237,0.18)';
+    charBanner.textContent = 'Changes here also apply in the "My Damage" mode inside each event.';
+    charPanel.appendChild(charBanner);
+
+    const charGrid = document.createElement('div');
+    charGrid.className = 'char-inputs-grid';
+    charGrid.style.display = 'grid';
+    charGrid.style.gridTemplateColumns = 'repeat(auto-fill, minmax(160px, 1fr))';
+    charGrid.style.gap = '12px';
+    charPanel.appendChild(charGrid);
+
+    // Exact same tooltip text and structure as My Damage mode
+    const STACKED_DEF_TOOLTIP = 'This value is relevant only for def-lowering bosses and includes these special attack effects: "Raises DEF by X%", "Raises allies\' DEF by X%" (this one can come from allies too).';
+
+    const CHAR_INPUTS = [
+        { id: 'char_type',             label: 'Type',                 type: 'select',   options: ['STR','TEQ','INT','PHY','AGL'], default: 'STR'   },
+        { id: 'char_class',            label: 'Class',                type: 'select',   options: ['Super','Extreme'],             default: 'Super' },
+        { id: 'char_defense',          label: 'DEF',                  type: 'number',   default: 0,  min: 0, max: Infinity, step: 1 },
+        { id: 'char_damage_reduction', label: 'Damage Reduction (%)', type: 'number',   default: 0,  min: 0, max: 100,      step: 1 },
+        { id: 'char_type_def_boost',   label: 'Type DEF Boost Lv',   type: 'number',   default: 0,  min: 0, max: 50,       step: 1 },
+        { id: 'char_stacked_def',      label: 'Stacked DEF (%)',      type: 'number',   default: 0,  min: 0, max: Infinity, step: 1, tooltip: STACKED_DEF_TOOLTIP },
+        { id: 'char_passive_guard',    label: 'Passive Guard',        type: 'checkbox', default: false },
+    ];
+
+    const getStoredChar = (id, fallback) => {
+        const stored = sessionStorage.getItem('charInput_' + id);
+        if (stored === null) return fallback;
+        if (stored === '__true__') return true;
+        if (stored === '__false__') return false;
+        return stored;
+    };
+
+    CHAR_INPUTS.forEach(inp => {
+        const storedVal = getStoredChar(inp.id, inp.default);
+
+        const inputGroup = document.createElement('div');
+        inputGroup.style.display = 'flex';
+        inputGroup.style.flexDirection = 'column';
+        inputGroup.style.gap = '6px';
+
+        const label = document.createElement('label');
+        label.htmlFor = inp.id;
+        label.textContent = inp.label;
+        label.style.fontSize = '0.8rem';
+        label.style.color = 'var(--color-text-muted)';
+        label.style.fontWeight = '500';
+        label.style.letterSpacing = '0.2px';
+
+        if (inp.tooltip) {
+            const tipWrap = document.createElement('span');
+            tipWrap.style.position = 'relative';
+            tipWrap.style.display = 'inline-flex';
+            tipWrap.style.alignItems = 'center';
+            tipWrap.style.marginLeft = '4px';
+            const helpIcon = document.createElement('span');
+            helpIcon.textContent = '\u24D8';
+            helpIcon.style.cursor = 'help';
+            helpIcon.style.color = 'var(--color-accent)';
+            helpIcon.style.fontSize = '0.8rem';
+            helpIcon.style.lineHeight = '1';
+            helpIcon.style.userSelect = 'none';
+            const tipBox = document.createElement('span');
+            tipBox.textContent = inp.tooltip;
+            tipBox.style.cssText = [
+                'position:absolute',
+                'bottom:calc(100% + 6px)',
+                'left:50%',
+                'transform:translateX(-50%)',
+                'width:min(260px, 80vw)',
+                'background:#1a202c',
+                'color:#e2e8f0',
+                'font-size:0.78rem',
+                'line-height:1.5',
+                'padding:8px 10px',
+                'border-radius:6px',
+                'border:1px solid rgba(99,179,237,0.25)',
+                'box-shadow:0 4px 12px rgba(0,0,0,0.5)',
+                'pointer-events:none',
+                'opacity:0',
+                'z-index:100',
+                'white-space:normal',
+                'text-align:left',
+                'font-weight:400',
+                'letter-spacing:normal',
+            ].join(';');
+            helpIcon.addEventListener('mouseenter', () => { tipBox.style.opacity = '1'; });
+            helpIcon.addEventListener('mouseleave', () => { tipBox.style.opacity = '0'; });
+            helpIcon.addEventListener('touchstart', (e) => {
+                e.preventDefault();
+                tipBox.style.opacity = tipBox.style.opacity === '1' ? '0' : '1';
+            }, { passive: false });
+            document.addEventListener('touchstart', (e) => {
+                if (!tipWrap.contains(e.target)) tipBox.style.opacity = '0';
+            }, { passive: true });
+            tipWrap.appendChild(helpIcon);
+            tipWrap.appendChild(tipBox);
+            label.appendChild(tipWrap);
+        }
+
+        let inputEl;
+        if (inp.type === 'select') {
+            inputEl = document.createElement('select');
+            inputEl.id = inp.id;
+            inputEl.style.cssText = [
+                'width:100%',
+                'padding:10px 32px 10px 12px',
+                'background:var(--color-bg)',
+                'border:1.5px solid var(--color-border)',
+                'border-radius:6px',
+                'color:var(--color-text)',
+                'font-family:inherit',
+                'font-size:max(16px,0.9rem)',
+                'cursor:pointer',
+                '-webkit-appearance:none',
+                'appearance:none',
+                'background-image:url("data:image/svg+xml,%3Csvg xmlns=\'http://www.w3.org/2000/svg\' width=\'12\' height=\'8\' viewBox=\'0 0 12 8\'%3E%3Cpath d=\'M1 1l5 5 5-5\' stroke=\'%2363b3ed\' stroke-width=\'1.5\' fill=\'none\' stroke-linecap=\'round\'/%3E%3C/svg%3E")',
+                'background-repeat:no-repeat',
+                'background-position:right 10px center',
+                'min-height:40px',
+                'touch-action:manipulation',
+            ].join(';');
+            inp.options.forEach(opt => {
+                const o = document.createElement('option');
+                o.value = opt; o.textContent = opt;
+                inputEl.appendChild(o);
+            });
+            inputEl.value = String(storedVal);
+            inputGroup.appendChild(label);
+            inputGroup.appendChild(inputEl);
+        } else if (inp.type === 'checkbox') {
+            // Styled toggle pill — same as My Damage mode
+            const isChecked = storedVal === true || storedVal === 'true' || storedVal === '__true__';
+            inputGroup.style.flexDirection = 'row';
+            inputGroup.style.alignItems = 'center';
+            inputGroup.style.gap = '10px';
+            inputGroup.style.padding = '8px 12px';
+            inputGroup.style.backgroundColor = isChecked ? 'rgba(99,179,237,0.12)' : 'rgba(99,179,237,0.05)';
+            inputGroup.style.border = '1px solid ' + (isChecked ? 'rgba(99,179,237,0.45)' : 'rgba(99,179,237,0.2)');
+            inputGroup.style.borderRadius = '8px';
+            inputGroup.style.cursor = 'pointer';
+
+            inputEl = document.createElement('input');
+            inputEl.type = 'checkbox';
+            inputEl.id = inp.id;
+            inputEl.checked = isChecked;
+            inputEl.style.cssText = 'position:absolute;opacity:0;pointer-events:none;width:0;height:0';
+
+            const track = document.createElement('div');
+            track.style.cssText = 'flex-shrink:0;width:40px;height:22px;border-radius:11px;border:1.5px solid rgba(99,179,237,0.5);background:' + (isChecked ? 'rgba(99,179,237,0.6)' : 'rgba(45,55,72,0.8)') + ';position:relative;transition:background 0.2s';
+            const thumb = document.createElement('div');
+            thumb.style.cssText = 'position:absolute;top:2px;left:' + (isChecked ? '18px' : '2px') + ';width:16px;height:16px;border-radius:50%;background:' + (isChecked ? '#63b3ed' : '#a0aec0') + ';transition:left 0.2s,background 0.2s';
+            track.appendChild(thumb);
+
+            label.textContent = inp.label;
+            label.style.margin = '0';
+            label.style.cursor = 'pointer';
+            label.style.userSelect = 'none';
+            label.style.fontSize = '0.9rem';
+            label.style.color = isChecked ? 'var(--color-accent)' : 'var(--color-text-muted)';
+            label.style.fontWeight = isChecked ? '600' : '500';
+            label.style.transition = 'color 0.2s,font-weight 0.2s';
+            label.htmlFor = inp.id;
+
+            const updatePG = (checked) => {
+                inputEl.checked = checked;
+                track.style.background = checked ? 'rgba(99,179,237,0.6)' : 'rgba(45,55,72,0.8)';
+                thumb.style.left = checked ? '18px' : '2px';
+                thumb.style.background = checked ? '#63b3ed' : '#a0aec0';
+                label.style.color = checked ? 'var(--color-accent)' : 'var(--color-text-muted)';
+                label.style.fontWeight = checked ? '600' : '500';
+                inputGroup.style.backgroundColor = checked ? 'rgba(99,179,237,0.12)' : 'rgba(99,179,237,0.05)';
+                inputGroup.style.borderColor = checked ? 'rgba(99,179,237,0.45)' : 'rgba(99,179,237,0.2)';
+            };
+            inputGroup.addEventListener('click', () => {
+                updatePG(!inputEl.checked);
+                inputEl.dispatchEvent(new Event('change', { bubbles: true }));
+            });
+
+            inputGroup.appendChild(inputEl);
+            inputGroup.appendChild(track);
+            inputGroup.appendChild(label);
+            charGrid.appendChild(inputGroup);
+
+            inputEl.addEventListener('change', () => {
+                sessionStorage.setItem('charInput_' + inp.id, inputEl.checked ? '__true__' : '__false__');
+                runCalculation();
+            });
+            return; // already appended
+        } else {
+            inputEl = document.createElement('input');
+            inputEl.type = 'number';
+            inputEl.id = inp.id;
+            inputEl.placeholder = String(inp.default ?? 0);
+            inputEl.min = inp.min ?? 0;
+            if (inp.max != null && isFinite(inp.max)) inputEl.max = inp.max;
+            inputEl.step = inp.step || 1;
+            const sv = getStoredChar(inp.id, null);
+            if (sv !== null && sv !== String(inp.default)) inputEl.value = sv;
+            inputEl.style.padding = '10px';
+            inputEl.style.backgroundColor = 'var(--color-bg)';
+            inputEl.style.border = '1px solid var(--color-border)';
+            inputEl.style.borderRadius = '6px';
+            inputEl.style.color = 'var(--color-text)';
+            inputEl.style.fontFamily = 'inherit';
+            inputEl.style.fontSize = '0.9rem';
+            inputEl.style.MozAppearance = 'textfield';
+            inputGroup.appendChild(label);
+            inputGroup.appendChild(inputEl);
+        }
+        charGrid.appendChild(inputGroup);
+
+        const evType = (inputEl.tagName === 'SELECT') ? 'change' : 'input';
+        inputEl.addEventListener(evType, () => {
+            sessionStorage.setItem('charInput_' + inp.id, inputEl.value);
+            runCalculation();
+        });
+    });
+
+    // DEF note — same as My Damage mode
+    const defNote = document.createElement('p');
+    defNote.style.cssText = 'margin:12px 0 0 0;font-size:0.75rem;color:var(--color-text-muted);line-height:1.5';
+    defNote.innerHTML = '\u24D8 The defense shown in battle is not always accurate. Calculate yours at <a href="https://dokkanstats.com/en/defcalculator/" target="_blank" rel="noopener noreferrer" style="color:var(--color-accent);text-decoration:underline">dokkanstats.com</a>.';
+    charPanel.appendChild(defNote);
+
+    // ── Results section ────────────────────────────────────────────────────────
+    const resultsSection = document.createElement('div');
+    resultsSection.className = 'dc-results-section';
+    container.appendChild(resultsSection);
+
+    // ── Live calculation ───────────────────────────────────────────────────────
+    // Map char input ids to their actual element references (already created above)
+    // This lets readCharInputs work before/after DOM insertion without getElementById
+    const charInputEls = {};
+    CHAR_INPUTS.forEach(cfg => {
+        const el = charGrid.querySelector('#' + cfg.id) ||
+                   charPanel.querySelector('#' + cfg.id);
+        if (el) charInputEls[cfg.id] = el;
+    });
+
+    function readCharInputs() {
+        const out = {};
+        CHAR_INPUTS.forEach(cfg => {
+            const el = charInputEls[cfg.id] || document.getElementById(cfg.id);
+            if (!el) { out[cfg.id] = cfg.default ?? 0; return; }
+            if (el.type === 'checkbox') out[cfg.id] = el.checked;
+            else if (el.tagName === 'SELECT') out[cfg.id] = el.value;
+            else out[cfg.id] = parseFloat(el.value) || parseFloat(el.placeholder) || 0;
+        });
+        return out;
+    }
+
+    function runCalculation() {
+        const ei = {
+            enemy_atk:        parseFloat(atkInput.value)        || parseFloat(atkInput.placeholder)        || 0,
+            enemy_def_lower:  parseFloat(defLowerInput.value)   || parseFloat(defLowerInput.placeholder)   || 0,
+            enemy_crit:       critInput.checked,
+            enemy_def_ignore: parseFloat(defIgnoreInput.value)  || parseFloat(defIgnoreInput.placeholder)  || 0,
+        };
+        const results = calculateStandaloneDamage(ei, readCharInputs());
+        renderStandaloneDamageResults(resultsSection, results, critInput.checked);
+    }
+
+    // Defer first calculation until after performPageTransition adds us to the DOM
+    requestAnimationFrame(() => requestAnimationFrame(() => runCalculation()));
 }
 
 /**

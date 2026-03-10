@@ -1664,3 +1664,254 @@ footer::before {
   background: rgba(99, 179, 237, 0.3);
   color: #e2e8f0;
 }
+
+/* =====================================================
+   TOOLS SECTION (Events page)
+   ===================================================== */
+.tools-section {
+  margin-top: 24px;
+}
+
+.tools-section-title {
+  font-size: 0.75rem;
+  font-weight: 700;
+  color: var(--color-text-muted);
+  text-transform: uppercase;
+  letter-spacing: 0.08em;
+  margin-bottom: 10px;
+  padding-left: 4px;
+}
+
+.tool-card {
+  display: flex;
+  align-items: center;
+  gap: 14px;
+  padding: 14px 18px;
+  background: var(--color-bg-medium);
+  border: 1px solid var(--color-border);
+  border-radius: var(--radius-md);
+  cursor: pointer;
+  transition: background 0.18s, border-color 0.18s, transform 0.18s;
+  max-width: 480px;
+}
+
+.tool-card:hover {
+  background: var(--color-surface);
+  border-color: var(--color-accent);
+  transform: translateY(-2px);
+}
+
+.tool-card-icon {
+  font-size: 1.6rem;
+  line-height: 1;
+  flex-shrink: 0;
+}
+
+.tool-card-info {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+}
+
+.tool-card-name {
+  font-size: 0.95rem;
+  font-weight: 600;
+  color: var(--color-text);
+}
+
+.tool-card-desc {
+  font-size: 0.78rem;
+  color: var(--color-text-muted);
+}
+
+/* =====================================================
+   STANDALONE DAMAGE CALCULATOR PAGE
+   ===================================================== */
+
+/* Two-panel layout */
+.dc-panels {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 16px;
+  margin-bottom: 20px;
+}
+
+.dc-card {
+  flex: 1 1 280px;
+  background: var(--color-bg-medium);
+  border: 1px solid var(--color-border);
+  border-radius: var(--radius-lg);
+  padding: 18px 20px;
+}
+
+.dc-card-title {
+  font-size: 0.8rem;
+  font-weight: 700;
+  color: var(--color-accent);
+  text-transform: uppercase;
+  letter-spacing: 0.07em;
+  margin-bottom: 14px;
+}
+
+/* Enemy input grid — 2 equal columns by default */
+.dc-enemy-grid {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 12px;
+}
+
+.dc-input-group {
+  display: flex;
+  flex-direction: column;
+  gap: 5px;
+}
+
+/* Crit toggle — no longer needs to span grid columns (handled inline by critRow wrapper) */
+.dc-input-group.dc-check-group {
+  /* intentionally empty — layout set inline */
+}
+
+.dc-input-label {
+  font-size: 0.75rem;
+  color: var(--color-text-muted);
+  font-weight: 500;
+}
+
+/* Section label above results */
+.dc-section-label {
+  font-size: 0.75rem;
+  font-weight: 700;
+  color: var(--color-text-muted);
+  text-transform: uppercase;
+  letter-spacing: 0.08em;
+}
+
+/* Results section card */
+.dc-results-section {
+  background: var(--color-bg-medium);
+  border: 1px solid var(--color-border);
+  border-radius: var(--radius-lg);
+  padding: 18px 20px;
+  overflow-x: auto;
+}
+
+/* Table rows use CSS grid: type-label | Super col | Extreme col */
+.dc-table-header,
+.dc-table-row {
+  display: grid;
+  grid-template-columns: 110px 1fr 1fr;
+  gap: 0;
+}
+
+.dc-table-header {
+  border-bottom: 1px solid var(--color-border);
+  margin-bottom: 4px;
+  padding-bottom: 6px;
+}
+
+.dc-th {
+  font-size: 0.72rem;
+  font-weight: 700;
+  color: var(--color-text-muted);
+  text-transform: uppercase;
+  letter-spacing: 0.06em;
+  padding: 4px 8px;
+  text-align: center;
+  justify-content: center;
+  min-width: 0;
+}
+
+/* First header cell (Type label) is left-aligned */
+.dc-table-header .dc-th:first-child {
+  text-align: left;
+  justify-content: flex-start;
+}
+
+.dc-table-row {
+  border-radius: var(--radius-sm);
+  margin-bottom: 3px;
+}
+
+.dc-td {
+  padding: 10px 8px;
+  display: flex;
+  align-items: center;
+  min-width: 0;
+}
+
+.dc-td-type {
+  gap: 6px;
+}
+
+/* Damage value cells — large and prominent, centered */
+.dc-td-dmg {
+  font-size: 1.05rem;
+  font-weight: 700;
+  color: var(--color-text);
+  letter-spacing: -0.01em;
+  white-space: nowrap;
+  justify-content: center;
+  text-align: center;
+}
+
+/* Row tinting — advantage = enemy has an edge (bad for player) */
+.dc-row-advantage {
+  background: rgba(192, 57, 43, 0.12);
+}
+.dc-row-advantage .dc-td-dmg {
+  color: #fc8181;
+}
+
+.dc-row-neutral {
+  background: transparent;
+}
+.dc-row-neutral .dc-td-dmg {
+  color: var(--color-text);
+}
+
+.dc-row-disadvantage {
+  background: rgba(46, 213, 115, 0.08);
+}
+.dc-row-disadvantage .dc-td-dmg {
+  color: #68d391;
+}
+
+/* Type badges */
+.dc-type-badge {
+  display: inline-block;
+  padding: 3px 8px;
+  border-radius: 4px;
+  font-size: 0.72rem;
+  font-weight: 700;
+  color: #fff;
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+}
+
+.dc-type-str { background: #c0392b; }   /* red    */
+.dc-type-phy { background: #d35400; }   /* orange */
+.dc-type-int { background: #6b46c1; }   /* purple */
+.dc-type-teq { background: #276749; }   /* green  */
+.dc-type-agl { background: #2b6cb0; }   /* blue   */
+
+/* Class chips */
+.dc-class-chip {
+  display: inline-block;
+  padding: 2px 6px;
+  border-radius: 4px;
+  font-size: 0.67rem;
+  font-weight: 600;
+  letter-spacing: 0.03em;
+}
+
+.dc-class-super {
+  background: rgba(99, 179, 237, 0.15);
+  color: #90cdf4;
+  border: 1px solid rgba(99, 179, 237, 0.3);
+}
+
+.dc-class-extreme {
+  background: rgba(255, 71, 87, 0.12);
+  color: #ff6b7a;
+  border: 1px solid rgba(255, 71, 87, 0.25);
+}

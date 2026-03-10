@@ -253,3 +253,60 @@
     box-shadow: none;
   }
 }
+
+/* =====================================================
+   DAMAGE CALCULATOR PAGE — MOBILE
+   ===================================================== */
+@media (max-width: 576px) {
+  .dc-panels {
+    flex-direction: column;
+  }
+
+  /* Keep 2-col enemy grid on mobile */
+  .dc-enemy-grid {
+    grid-template-columns: 1fr 1fr;
+  }
+
+  .dc-results-section {
+    padding: 12px 10px;
+  }
+
+  /* Tighten table columns on small screens:
+     narrower type badge col, data columns share space equally */
+  .dc-table-header,
+  .dc-table-row {
+    grid-template-columns: 70px 1fr 1fr;
+  }
+
+  .dc-th {
+    font-size: 0.68rem;
+    padding: 4px 4px;
+  }
+
+  .dc-td {
+    padding: 9px 4px;
+  }
+
+  .dc-td-dmg {
+    font-size: 0.9rem;
+    white-space: normal;
+    overflow-wrap: break-word;
+  }
+
+  .dc-type-badge {
+    font-size: 0.62rem;
+    padding: 2px 5px;
+  }
+}
+
+@media (max-width: 400px) {
+  .dc-table-header,
+  .dc-table-row {
+    grid-template-columns: 58px 1fr 1fr;
+  }
+
+  .dc-td-dmg {
+    font-size: 0.8rem;
+    white-space: normal;
+  }
+}
