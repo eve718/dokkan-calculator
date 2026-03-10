@@ -350,11 +350,11 @@ function displayDamageResults(enemy, damageResults) {
         valuesGrid.appendChild(msg);
     } else {
         for (const [damageKey, value] of Object.entries(damageResults)) {
-            // Derive label from the matching ATK output definition
+            // Derive label from the matching ATK output definition — keep ATK in label
             const atkOutputId = damageKey.replace(/_damage(\d*)$/, '_atk$1');
             const matchingOutput = enemy.outputs?.find(o => o.id === atkOutputId);
             const labelText = matchingOutput
-                ? matchingOutput.label.replace(/\batk\b/gi, 'Damage')
+                ? matchingOutput.label
                 : damageKey.replace(/_/g, ' ');
 
             const card = document.createElement('div');
@@ -382,13 +382,13 @@ function displayDamageResults(enemy, damageResults) {
             amountEl.style.fontFamily = "'Courier New', monospace";
 
             if (isDDmin && isDDmax) {
-                amountEl.textContent = 'DD (1\u2013255)';
+                amountEl.textContent = 'Double Digits';
             } else if (isDDmin) {
-                amountEl.textContent = `DD \u2013 ${formatNumber(max)}`;
+                amountEl.textContent = `DD \u2013 ${formatNumber(max)} DMG`;
             } else if (isDDmax || min === max) {
-                amountEl.textContent = formatNumber(min);
+                amountEl.textContent = `${formatNumber(min)} DMG`;
             } else {
-                amountEl.textContent = `${formatNumber(min)} \u2013 ${formatNumber(max)}`;
+                amountEl.textContent = `${formatNumber(min)} \u2013 ${formatNumber(max)} DMG`;
             }
 
             card.appendChild(labelEl);

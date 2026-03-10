@@ -320,10 +320,6 @@ function showEventsPage(container) {
 
     const renderEvents = (filteredEvents) => {
         grid.innerHTML = '';
-        grid.style.animation = 'none';
-        void grid.offsetWidth;
-        grid.style.animation = '';
-        grid.style.animation = 'fadeInSearchResults 0.3s ease-in-out';
         
         filteredEvents.forEach(event => {
             const card = document.createElement('div');
@@ -433,10 +429,6 @@ function showStagesPage(container, eventId) {
 
     const renderStages = (stages) => {
         grid.innerHTML = '';
-        grid.style.animation = 'none';
-        void grid.offsetWidth;
-        grid.style.animation = '';
-        grid.style.animation = 'fadeInSearchResults 0.3s ease-in-out';
         
         stages.forEach(stage => {
             const card = document.createElement('div');
@@ -526,10 +518,6 @@ function showBattlesPage(container, eventId, stageId) {
 
     const renderBattles = (battlesList) => {
         grid.innerHTML = '';
-        grid.style.animation = 'none';
-        void grid.offsetWidth;
-        grid.style.animation = '';
-        grid.style.animation = 'fadeInSearchResults 0.3s ease-in-out';
         
         battlesList.forEach(battle => {
             const card = document.createElement('div');
@@ -750,6 +738,8 @@ function displayEnemiesForPhase(container, phase, totalPhases = 1) {
     const formsContainer = container;
     if (AppConfig.getMode() === 'damage') {
         formsContainer.style.display = 'none';
+        const phaseTabsEl = document.querySelector('.phase-tabs-container');
+        if (phaseTabsEl) phaseTabsEl.style.display = 'none';
     } else {
         formsContainer.style.display = '';
     }
@@ -901,6 +891,34 @@ function createPhaseDamageCalculator(container, onModeChange) {
 
     damageCalcContainer.appendChild(modeContainer);
 
+    // Mode explanation banners
+    const atkInfoBanner = document.createElement('p');
+    atkInfoBanner.className = 'mode-info-banner mode-info-atk';
+    atkInfoBanner.textContent = 'You can change any enemy inputs in here, changes will be stored and taken over to "My Damage" mode.';
+    atkInfoBanner.style.margin = '0 0 16px 0';
+    atkInfoBanner.style.fontSize = '0.82rem';
+    atkInfoBanner.style.color = 'var(--color-text-muted)';
+    atkInfoBanner.style.lineHeight = '1.5';
+    atkInfoBanner.style.padding = '10px 14px';
+    atkInfoBanner.style.background = 'rgba(99, 179, 237, 0.07)';
+    atkInfoBanner.style.borderRadius = '6px';
+    atkInfoBanner.style.border = '1px solid rgba(99, 179, 237, 0.18)';
+    damageCalcContainer.appendChild(atkInfoBanner);
+
+    const dmgInfoBanner = document.createElement('p');
+    dmgInfoBanner.className = 'mode-info-banner mode-info-dmg';
+    dmgInfoBanner.textContent = 'You can change any character inputs in here, changes will be stored for the current session.';
+    dmgInfoBanner.style.margin = '0 0 16px 0';
+    dmgInfoBanner.style.fontSize = '0.82rem';
+    dmgInfoBanner.style.color = 'var(--color-text-muted)';
+    dmgInfoBanner.style.lineHeight = '1.5';
+    dmgInfoBanner.style.padding = '10px 14px';
+    dmgInfoBanner.style.background = 'rgba(72, 187, 237, 0.07)';
+    dmgInfoBanner.style.borderRadius = '6px';
+    dmgInfoBanner.style.border = '1px solid rgba(72, 187, 237, 0.18)';
+    dmgInfoBanner.style.display = 'none';
+    damageCalcContainer.appendChild(dmgInfoBanner);
+
     // Character inputs section (only visible in damage mode)
     const charInputsSection = document.createElement('div');
     charInputsSection.className = 'character-inputs-section';
@@ -918,9 +936,10 @@ function createPhaseDamageCalculator(container, onModeChange) {
     charInputsSection.appendChild(charTitle);
 
     const charInputsGrid = document.createElement('div');
+    charInputsGrid.className = 'char-inputs-grid';
     charInputsGrid.style.display = 'grid';
-    charInputsGrid.style.gridTemplateColumns = 'repeat(auto-fit, minmax(180px, 1fr))';
-    charInputsGrid.style.gap = '15px';
+    charInputsGrid.style.gridTemplateColumns = 'repeat(auto-fill, minmax(160px, 1fr))';
+    charInputsGrid.style.gap = '12px';
 
     const characterInputs = [
         { id: 'char_type', label: 'Type', type: 'select', options: ['STR', 'TEQ', 'INT', 'PHY', 'AGL'], default: 'STR' },
@@ -976,10 +995,10 @@ function createPhaseDamageCalculator(container, onModeChange) {
                 'bottom:calc(100% + 6px)',
                 'left:50%',
                 'transform:translateX(-50%)',
-                'width:240px',
+                'width:min(260px, 80vw)',
                 'background:#1a202c',
                 'color:#e2e8f0',
-                'font-size:0.75rem',
+                'font-size:0.78rem',
                 'line-height:1.5',
                 'padding:8px 10px',
                 'border-radius:6px',
@@ -987,7 +1006,6 @@ function createPhaseDamageCalculator(container, onModeChange) {
                 'box-shadow:0 4px 12px rgba(0,0,0,0.5)',
                 'pointer-events:none',
                 'opacity:0',
-                'transition:opacity 0.15s',
                 'z-index:100',
                 'white-space:normal',
                 'text-align:left',
@@ -995,8 +1013,17 @@ function createPhaseDamageCalculator(container, onModeChange) {
                 'letter-spacing:normal',
             ].join(';');
 
+            // Desktop: hover; mobile: tap toggle
             helpIcon.addEventListener('mouseenter', () => { tipBox.style.opacity = '1'; });
             helpIcon.addEventListener('mouseleave', () => { tipBox.style.opacity = '0'; });
+            helpIcon.addEventListener('touchstart', (e) => {
+                e.preventDefault();
+                tipBox.style.opacity = tipBox.style.opacity === '1' ? '0' : '1';
+            }, { passive: false });
+            // Tap anywhere else to dismiss
+            document.addEventListener('touchstart', (e) => {
+                if (!tipWrap.contains(e.target)) tipBox.style.opacity = '0';
+            }, { passive: true });
 
             tipWrap.appendChild(helpIcon);
             tipWrap.appendChild(tipBox);
@@ -1010,7 +1037,6 @@ function createPhaseDamageCalculator(container, onModeChange) {
         if (input.type === 'select') {
             inputElement = document.createElement('select');
             inputElement.id = inputId;
-            inputElement.style.padding = '10px';
             inputElement.style.backgroundColor = 'var(--color-bg)';
             inputElement.style.border = '1px solid var(--color-border)';
             inputElement.style.borderRadius = '6px';
@@ -1207,6 +1233,8 @@ function createPhaseDamageCalculator(container, onModeChange) {
     // Mode switching logic - START IN ATK MODE
     AppConfig.setMode('atk');
     charInputsSection.style.display = 'none';
+    atkInfoBanner.style.display = '';
+    dmgInfoBanner.style.display = 'none';
     applyAtkStyle();
 
     atkBtn.addEventListener('click', () => {
@@ -1214,6 +1242,8 @@ function createPhaseDamageCalculator(container, onModeChange) {
         AppConfig.setMode('atk');
         charInputsSection.style.display = 'none';
         damageResultsSection.style.display = 'none';
+        atkInfoBanner.style.display = '';
+        dmgInfoBanner.style.display = 'none';
         applyAtkStyle();
 
         const formsContainer = document.getElementById('enemy-forms-container') || document.querySelector('#enemy-forms-container');
@@ -1226,6 +1256,10 @@ function createPhaseDamageCalculator(container, onModeChange) {
             });
         }
 
+        // Show phase tabs in ATK mode
+        const phaseTabsEl = document.querySelector('.phase-tabs-container');
+        if (phaseTabsEl) phaseTabsEl.style.display = '';
+
         if (onModeChange) onModeChange('atk');
     });
 
@@ -1234,6 +1268,8 @@ function createPhaseDamageCalculator(container, onModeChange) {
         AppConfig.setMode('damage');
         charInputsSection.style.display = 'block';
         damageResultsSection.style.display = 'block';
+        atkInfoBanner.style.display = 'none';
+        dmgInfoBanner.style.display = '';
         applyDmgStyle();
 
         const formsContainer = document.getElementById('enemy-forms-container');
@@ -1244,6 +1280,10 @@ function createPhaseDamageCalculator(container, onModeChange) {
                 if (enemy) calculateDamage(enemy);
             });
         }
+
+        // Hide phase tabs in damage mode — not relevant
+        const phaseTabsEl = document.querySelector('.phase-tabs-container');
+        if (phaseTabsEl) phaseTabsEl.style.display = 'none';
 
         if (onModeChange) onModeChange('damage');
     });
