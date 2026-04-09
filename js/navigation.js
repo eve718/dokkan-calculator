@@ -359,6 +359,14 @@ function showEventsPage(container) {
     const renderEvents = (filteredEvents) => {
         grid.innerHTML = '';
         
+        if (filteredEvents.length === 0) {
+            const noResults = document.createElement('div');
+            noResults.className = 'no-results';
+            noResults.textContent = 'No results found';
+            grid.appendChild(noResults);
+            return;
+        }
+        
         filteredEvents.forEach(event => {
             const card = document.createElement('div');
             card.className = 'card';
@@ -899,6 +907,14 @@ function showStagesPage(container, eventId) {
     const renderStages = (stages) => {
         grid.innerHTML = '';
         
+        if (stages.length === 0) {
+            const noResults = document.createElement('div');
+            noResults.className = 'no-results';
+            noResults.textContent = 'No results found';
+            grid.appendChild(noResults);
+            return;
+        }
+        
         stages.forEach(stage => {
             const card = document.createElement('div');
             card.className = 'card';
@@ -987,6 +1003,14 @@ function showBattlesPage(container, eventId, stageId) {
 
     const renderBattles = (battlesList) => {
         grid.innerHTML = '';
+        
+        if (battlesList.length === 0) {
+            const noResults = document.createElement('div');
+            noResults.className = 'no-results';
+            noResults.textContent = 'No results found';
+            grid.appendChild(noResults);
+            return;
+        }
         
         battlesList.forEach(battle => {
             const card = document.createElement('div');

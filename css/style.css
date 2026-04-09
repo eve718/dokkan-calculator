@@ -199,6 +199,16 @@ h2 {
   display: block;
 }
 
+/* No results message */
+.no-results {
+  grid-column: 1 / -1;
+  text-align: center;
+  padding: 40px 20px;
+  color: #a0aec0;
+  font-size: 18px;
+  font-weight: 500;
+}
+
 /* Form styles for enemy calculator */
 #enemy-forms-container {
   display: flex;
