@@ -397,6 +397,7 @@ function generateDataSnippet(event, stagesWithBattles) {
         `            id: "${event.id}",`,
         `            name: "${event.name}",`,
         `            image: "${event.image}",`,
+        `            visible: true,`,
         `            stages: [`,
         stagesBlock,
         `            ]`,
@@ -435,9 +436,9 @@ function formulaStub(enemy, eventName, battleName) {
 
     if (outputIds.has('normal_atk')) {
         if (hasDebuffPassive && hasDebuffSuper) {
-            calcLines.push(`        const normalAtk = baseAtk * (1 - atkDebuffPassive) * (1 - atkDebuffSuper > 0 ? 1 - atkDebuffSuper : 0); // TODO`);
+            calcLines.push(`        const normalAtk = baseAtk * (1 - atk_debuff_passive) * (1 - atk_debuff_super > 0 ? 1 - atk_debuff_super : 0); // TODO`);
         } else if (hasDebuffPassive) {
-            calcLines.push(`        const normalAtk = baseAtk * (1 - atkDebuffPassive); // TODO`);
+            calcLines.push(`        const normalAtk = baseAtk * (1 - atk_debuff_passive); // TODO`);
         } else {
             calcLines.push(`        const normalAtk = baseAtk; // TODO`);
         }
@@ -449,16 +450,16 @@ function formulaStub(enemy, eventName, battleName) {
     if (outputIds.has('super_atk')) {
         const multi = hasTwoSupers ? 'saMulti1' : 'saMulti';
         if (hasDebuffPassive && hasDebuffSuper) {
-            calcLines.push(`        const superAtk = baseAtk * (1 - atkDebuffPassive) * (${multi} - atkDebuffSuper > 0 ? ${multi} - atkDebuffSuper : 0); // TODO`);
+            calcLines.push(`        const superAtk = baseAtk * (1 - atk_debuff_passive) * (${multi} - atk_debuff_super > 0 ? ${multi} - atk_debuff_super : 0); // TODO`);
         } else if (hasDebuffPassive) {
-            calcLines.push(`        const superAtk = baseAtk * (1 - atkDebuffPassive) * ${multi}; // TODO`);
+            calcLines.push(`        const superAtk = baseAtk * (1 - atk_debuff_passive) * ${multi}; // TODO`);
         } else {
             calcLines.push(`        const superAtk = baseAtk * ${multi}; // TODO`);
         }
     }
     if (outputIds.has('super_atk2')) {
         if (hasDebuffPassive && hasDebuffSuper) {
-            calcLines.push(`        const superAtk2 = baseAtk * (1 - atkDebuffPassive) * (saMulti2 - atkDebuffSuper > 0 ? saMulti2 - atkDebuffSuper : 0); // TODO`);
+            calcLines.push(`        const superAtk2 = baseAtk * (1 - atk_debuff_passive) * (saMulti2 - atk_debuff_super > 0 ? saMulti2 - atk_debuff_super : 0); // TODO`);
         } else {
             calcLines.push(`        const superAtk2 = baseAtk * saMulti2; // TODO`);
         }

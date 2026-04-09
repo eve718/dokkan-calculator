@@ -354,7 +354,7 @@ function showEventsPage(container) {
     grid.className = 'card-grid';
     grid.id = 'events-grid';
 
-    const events = gameData.events.filter(e => e.visible !== false);
+    const events = gameData.events.filter(e => e.visible !== false).reverse();
 
     const renderEvents = (filteredEvents) => {
         grid.innerHTML = '';
