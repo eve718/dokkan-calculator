@@ -80,7 +80,7 @@ const TYPE_CYCLE = { STR: 'PHY', PHY: 'INT', INT: 'TEQ', TEQ: 'AGL', AGL: 'STR' 
 function getTypeRelation(enemyType, charType) {
     if (!enemyType || !charType) return 'neutral';
     if (TYPE_CYCLE[enemyType] === charType) return 'advantage';
-    if (TYPE_CYCLE[charType]  === enemyType) return 'disadvantage';
+    if (TYPE_CYCLE[charType] === enemyType) return 'disadvantage';
     return 'neutral';
 }
 
@@ -93,39 +93,38 @@ function isSameClass(enemyClass, charClass) {
 
 // ─── Core formula ─────────────────────────────────────────────────────────────
 
-const createDefaultDamageFormula = () => function(data) {
+const createDefaultDamageFormula = () => function (data) {
     const { characterInputs, enemyAttackResults, enemyProperties } = data;
 
-    const baseDEF         = characterInputs.char_defense          || 0;
-    const stackedDefPct   = characterInputs.char_stacked_def      || 0;   // % (0–100)
+    const baseDEF = characterInputs.char_defense || 0;
+    const stackedDefPct = characterInputs.char_stacked_def || 0;   // % (0–100)
     const dmgReductionPct = characterInputs.char_damage_reduction || 0;   // % (0–100)
-    const typeDefBoostLv  = characterInputs.char_type_def_boost   || 0;   // level (integer)
-    const passiveGuard    = characterInputs.char_passive_guard    || false;
-    const charType        = (characterInputs.char_type  || 'STR').toUpperCase();
-    const charClass       = (characterInputs.char_class || 'Super');
+    const typeDefBoostLv = characterInputs.char_type_def_boost || 0;   // level (integer)
+    const passiveGuard = characterInputs.char_passive_guard || false;
+    const charType = (characterInputs.char_type || 'STR').toUpperCase();
+    const charClass = (characterInputs.char_class || 'Super');
 
-    const enemyType  = (enemyProperties.enemy_type  || null);
+    const enemyType = (enemyProperties.enemy_type || null);
     const enemyClass = (enemyProperties.enemy_class || 'Super');
 
-    const relation   = getTypeRelation(enemyType, charType);
-    const sameClass  = isSameClass(enemyClass, charClass);
-    const dmgMult    = 1 - dmgReductionPct / 100;
+    const relation = getTypeRelation(enemyType, charType);
+    const sameClass = isSameClass(enemyClass, charClass);
+    const dmgMult = 1 - dmgReductionPct / 100;
 
     const result = {};
 
     for (const [atkKey, atkValue] of Object.entries(enemyAttackResults)) {
         if (typeof atkValue !== 'number' || atkValue <= 0) continue;
 
-        const damageKey    = atkKey.replace(/_atk\d*$/, (m) => m.replace('_atk', '_damage'));
+        const damageKey = atkKey.replace(/_atk\d*$/, (m) => m.replace('_atk', '_damage'));
         const defIgnorePct = enemyProperties[atkKey + '_def_ignore'] || 0;   // % (0–100)
-        const defLowerPct  = enemyProperties[atkKey + '_def_lower']  || 0;   // % (0–100)
-        const isCrit       = defIgnorePct > 0;
+        const defLowerPct = enemyProperties[atkKey + '_def_lower'] || 0;   // % (0–100)
+        const isCrit = defIgnorePct > 0;
 
         // — Effective DEF —
         // totalDEF = base boosted by any stacking (0% stacking → just baseDEF).
         // DEF-lowering reduces totalDEF by defLowerPct % even when stacked DEF is 0.
-        const totalDEF = baseDEF * (1 + stackedDefPct / 100);
-        const effectiveDEF = defLowerPct > 0 ? totalDEF * (1 - defLowerPct / 100) : totalDEF;
+        const effectiveDEF = baseDEF / (1 + stackedDefPct / 100) * (1 + stackedDefPct/100 - defLowerPct / 100);
 
         // Apply ±variance: ATK ranges from base×1.0 to base×1.03
         const atkMin = atkValue;

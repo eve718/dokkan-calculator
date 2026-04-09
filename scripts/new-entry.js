@@ -344,9 +344,9 @@ function enemyBlock(enemy, indent) {
         `${pad(pp)}id: "${enemy.id}",`,
         `${pad(pp)}name: "${enemy.name}",`,
         `${pad(pp)}image: "images/enemies/${enemy.imageFile}",`,
-        `${pad(pp)}typeIcon: 'images/types/${enemy.typeIcon}.jpg',`,
-        `${pad(pp)}rarityIcon: 'images/rarity/${enemy.rarity}.jpg',`,
-        `${pad(pp)}background: 'images/bgs/${enemy.bg}.jpg',`,
+        `${pad(pp)}typeIcon: 'images/types/${enemy.typeIcon}.webp',`,
+        `${pad(pp)}rarityIcon: 'images/rarity/${enemy.rarity}.webp',`,
+        `${pad(pp)}background: 'images/bgs/${enemy.bg}.webp',`,
         `${pad(pp)}inputs: [${ins}],`,
         `${pad(pp)}formula: "${enemy.id}",`,
         `${pad(pp)}outputs: [${outs}],`,
@@ -592,10 +592,10 @@ async function main() {
         console.log('── Event ──────────────────────────────────────');
         const id   = await ask('Event ID (4 digits, e.g. 1730)', event && event.id);
         const name = await ask('Event name', event && event.name);
-        const nav  = await navPrompt(`Event "${name}" (id: ${id}, image: images/events/${id}.jpg)`);
+        const nav  = await navPrompt(`Event "${name}" (id: ${id}, image: images/events/${id}.webp)`);
         if (nav === 'redo') continue;
         // 'back' at step 0 → treat as redo (nowhere further back)
-        event = { id, name, image: `images/events/${id}.jpg` };
+        event = { id, name, image: `images/events/${id}.webp` };
         break;
     }
 
@@ -620,7 +620,7 @@ async function main() {
                 const name = await ask('Event name', event.name);
                 const nav  = await navPrompt(`Event "${name}" (id: ${id})`);
                 if (nav === 'redo') continue;
-                event = { id, name, image: `images/events/${id}.jpg` };
+                event = { id, name, image: `images/events/${id}.webp` };
                 break;
             }
             continue;
