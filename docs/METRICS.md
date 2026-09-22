@@ -122,7 +122,6 @@ const AppConfig = {
     pageTransitionDuration: 300,        // Used in navigation.js (3 places)
     inputDebounceDelay: 500,            // Used in calculator.js
     inputCorrectionDelay: 800,          // Used in calculator.js
-    retryCheckDelay: 100,               // Used in both modules
     // ... all other constants
 };
 

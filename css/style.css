@@ -137,21 +137,21 @@ h2 {
 /* Card styles for events and stages */
 .card-grid {
   display: grid;
-  grid-template-columns: repeat(auto-fill, minmax(300px, 1fr));
-  gap: 20px;
+  grid-template-columns: repeat(auto-fill, minmax(200px, 1fr));
+  gap: 14px;
   margin-top: 30px;
   margin-bottom: 20px;
 }
 
 .card {
   background: linear-gradient(135deg, #4a5568 0%, #3d4558 100%);
-  border-radius: 12px;
-  padding: 20px;
+  border-radius: 10px;
+  padding: 12px;
   box-shadow: 0 4px 12px rgba(0, 0, 0, 0.3);
   cursor: pointer;
   position: relative;
   overflow: hidden;
-  min-height: 180px;
+  min-height: 120px;
   display: flex;
   flex-direction: column;
   justify-content: flex-end;
@@ -193,9 +193,9 @@ h2 {
 /* Event image styling */
 .event-image {
   width: 100%;
-  height: 220px;
+  height: 150px;
   object-fit: cover;
-  border-radius: 8px;
+  border-radius: 6px;
   display: block;
 }
 
@@ -771,17 +771,6 @@ footer p {
 .page-content.active {
   opacity: 1;
   position: relative;
-}
-
-/* Remove outline from all input elements */
-input:focus,
-input:active,
-select:focus,
-select:active,
-textarea:focus,
-textarea:active {
-  outline: none !important;
-  box-shadow: none !important;
 }
 
 /* ===== HEADER CONTROLS ===== */
@@ -1738,6 +1727,410 @@ footer::before {
    STANDALONE DAMAGE CALCULATOR PAGE
    ===================================================== */
 
+.dc-mode-bar {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 8px;
+  margin: 0 0 18px;
+  padding: 10px 12px;
+  border: 1px solid var(--color-border);
+  border-radius: var(--radius-md);
+  background: rgba(26, 32, 44, 0.55);
+}
+
+.dc-mode-title {
+  color: var(--color-text-muted);
+  font-size: 0.78rem;
+  font-weight: 700;
+  margin-right: 4px;
+  text-transform: uppercase;
+}
+
+.dc-mode-choice {
+  border: 1px solid rgba(99, 179, 237, 0.28);
+  border-radius: 6px;
+  padding: 8px 12px;
+  color: var(--color-text-muted);
+  background: rgba(74, 85, 104, 0.35);
+  cursor: pointer;
+}
+
+.dc-mode-choice.active,
+.dc-mode-choice:hover {
+  color: var(--color-accent);
+  border-color: var(--color-accent);
+  background: rgba(99, 179, 237, 0.14);
+}
+
+.dc-boss-workspace {
+  margin-top: 18px;
+}
+
+.dc-character-jump {
+  position: fixed;
+  right: 22px;
+  bottom: 22px;
+  z-index: 20;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 42px;
+  height: 42px;
+  border: 1px solid var(--color-accent);
+  border-radius: 50%;
+  color: var(--color-accent);
+  background: rgba(26, 32, 44, 0.94);
+  box-shadow: 0 4px 14px rgba(0, 0, 0, 0.35);
+  font-size: 1.35rem;
+  line-height: 1;
+  cursor: pointer;
+}
+
+.dc-character-jump:hover,
+.dc-character-jump:focus-visible {
+  color: var(--color-bg-dark);
+  background: var(--color-accent);
+}
+
+.dc-boss-note,
+.dc-boss-meta {
+  color: var(--color-text-muted);
+  font-size: 0.8rem;
+  line-height: 1.5;
+}
+
+.dc-boss-note {
+  margin: 8px 0 14px;
+}
+
+.dc-recent-grid {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 10px;
+}
+
+.dc-recent-boss,
+.dc-selected-boss {
+  margin-top: 14px;
+  padding: 14px;
+  border: 1px solid var(--color-border);
+  border-radius: var(--radius-md);
+  background: rgba(55, 65, 81, 0.42);
+}
+
+.dc-recent-boss {
+  padding: 10px 12px;
+  margin-top: 10px;
+}
+
+.dc-recent-grid .dc-recent-boss {
+  margin-top: 0;
+}
+
+.dc-recent-boss .dc-boss-controls {
+  margin-bottom: 8px;
+}
+
+.dc-recent-boss .dc-boss-result {
+  margin-top: 8px;
+  padding-top: 8px;
+}
+
+.dc-recent-result {
+  border-top: 0;
+  padding-top: 0;
+}
+
+.dc-recent-boss .dc-boss-visual-row {
+  gap: 10px;
+  margin-top: 6px;
+}
+
+.dc-recent-result-body {
+  display: flex;
+  align-items: flex-start;
+  gap: 10px;
+  margin-top: 6px;
+}
+
+.dc-recent-damage-columns {
+  display: grid;
+  flex: 1;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 6px;
+}
+
+.dc-recent-damage-column {
+  min-width: 0;
+}
+
+.dc-recent-damage-column > strong {
+  display: block;
+  margin-bottom: 4px;
+  color: var(--color-accent-light);
+  font-size: 0.7rem;
+}
+
+.dc-recent-damage-column .dc-boss-damage-values {
+  display: grid;
+  grid-template-columns: 1fr;
+}
+
+.dc-recent-boss .enemy-image-container {
+  width: 76px;
+  height: 76px;
+  flex: 0 0 76px;
+}
+
+.dc-recent-result .dc-boss-meta {
+  margin: 2px 0 0;
+  font-size: 0.68rem;
+  line-height: 1.25;
+}
+
+.dc-recent-result h3 {
+  font-size: 0.86rem;
+}
+
+.dc-recent-boss .dc-boss-damage-values {
+  gap: 5px;
+}
+
+.dc-recent-boss .dc-boss-damage-item {
+  padding: 6px 8px;
+}
+
+.dc-recent-passive-summary {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 8px;
+  margin-top: 8px;
+}
+
+.dc-recent-passive-column {
+  padding: 7px 8px;
+  border: 1px solid rgba(99, 179, 237, 0.14);
+  border-radius: 5px;
+  background: rgba(26, 32, 44, 0.35);
+}
+
+.dc-recent-passive-column > strong {
+  display: block;
+  margin-bottom: 4px;
+  color: var(--color-accent-light);
+  font-size: 0.72rem;
+}
+
+.dc-recent-passive-row {
+  display: flex;
+  justify-content: space-between;
+  gap: 8px;
+  color: var(--color-text-muted);
+  font-size: 0.68rem;
+  line-height: 1.35;
+}
+
+.dc-recent-passive-row b {
+  color: var(--color-text);
+  white-space: nowrap;
+}
+
+.dc-boss-image-link {
+  display: block;
+  flex: 0 0 auto;
+}
+
+.dc-boss-controls {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  margin-bottom: 12px;
+}
+
+.dc-boss-controls label {
+  margin: 0;
+  color: var(--color-text-muted);
+  font-size: 0.8rem;
+}
+
+.dc-boss-controls select,
+.dc-boss-search {
+  min-height: 40px;
+  padding: 9px 12px;
+  border: 1px solid var(--color-border);
+  border-radius: 6px;
+  color: var(--color-text);
+  background: var(--color-bg);
+}
+
+.dc-boss-search {
+  width: 100%;
+  margin: 8px 0 10px;
+}
+
+.dc-boss-search-results {
+  display: grid;
+  gap: 6px;
+  max-height: 300px;
+  overflow-y: auto;
+}
+
+.dc-boss-search-result {
+  display: flex;
+  align-items: center;
+  justify-content: flex-start;
+  width: 100%;
+  min-height: 66px;
+  gap: 10px;
+  padding: 7px 10px;
+  border: 1px solid rgba(99, 179, 237, 0.18);
+  border-radius: 6px;
+  color: var(--color-text);
+  background: rgba(45, 55, 72, 0.7);
+  text-align: left;
+  margin-inline: 0;
+  cursor: pointer;
+}
+
+.dc-boss-search-result,
+.dc-boss-search-result * {
+  text-align: left;
+}
+
+.dc-search-enemy-image {
+  width: 50px;
+  height: 50px;
+  flex: 0 0 50px;
+}
+
+.dc-search-enemy-info {
+  display: flex;
+  flex: 1 1 auto;
+  min-width: 0;
+  flex-direction: column;
+  align-items: flex-start;
+  gap: 2px;
+  text-align: left;
+  align-self: flex-start;
+}
+
+.dc-search-enemy-info strong,
+.dc-search-enemy-info span {
+  overflow: hidden;
+  max-width: 100%;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.dc-search-enemy-info strong {
+  color: var(--color-text);
+  font-size: 0.82rem;
+}
+
+.dc-search-event-title {
+  display: block;
+  flex: 1 1 auto;
+  color: var(--color-accent-light);
+  font-size: 0.82rem;
+  font-weight: 600;
+  line-height: 1.35;
+}
+
+.dc-search-location {
+  display: block;
+  flex: 1 1 auto;
+  overflow: hidden;
+  color: var(--color-text-muted);
+  font-size: 0.7rem;
+  line-height: 1.3;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.dc-search-enemy-info span {
+  color: var(--color-text-muted);
+  font-size: 0.7rem;
+}
+
+.dc-boss-search-result:hover {
+  border-color: var(--color-accent);
+  background: rgba(99, 179, 237, 0.12);
+}
+
+.dc-boss-inputs {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(180px, 1fr));
+  gap: 10px;
+  margin-bottom: 14px;
+}
+
+.dc-boss-inputs .dc-section-label {
+  grid-column: 1 / -1;
+}
+
+.dc-boss-input-row {
+  display: flex;
+  justify-content: space-between;
+  gap: 12px;
+  padding: 8px 10px;
+  border: 1px solid rgba(99, 179, 237, 0.14);
+  border-radius: 6px;
+  color: var(--color-text-muted);
+  font-size: 0.78rem;
+}
+
+.dc-boss-input-row span:last-child {
+  color: var(--color-text);
+  font-weight: 700;
+}
+
+.dc-boss-result {
+  margin-top: 12px;
+  padding-top: 12px;
+  border-top: 1px solid rgba(99, 179, 237, 0.15);
+}
+
+.dc-boss-result h3 {
+  margin: 0;
+  color: var(--color-accent-light);
+  font-size: 1rem;
+}
+
+.dc-boss-visual-row {
+  display: flex;
+  align-items: center;
+  gap: 18px;
+  margin-top: 10px;
+}
+
+.dc-boss-damage-values {
+  display: grid;
+  flex: 1;
+  grid-template-columns: repeat(auto-fit, minmax(150px, 1fr));
+  gap: 8px;
+}
+
+.dc-boss-damage-item {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  padding: 9px;
+  border: 1px solid rgba(255, 107, 107, 0.28);
+  border-radius: 6px;
+  background: rgba(26, 32, 44, 0.65);
+}
+
+.dc-boss-damage-item span {
+  color: var(--color-text-muted);
+  font-size: 0.75rem;
+}
+
+.dc-boss-damage-item strong {
+  color: #ff6b6b;
+  font-family: 'Courier New', monospace;
+}
+
 /* Two-panel layout */
 .dc-panels {
   display: flex;
@@ -1924,4 +2317,196 @@ footer::before {
   background: rgba(255, 71, 87, 0.12);
   color: #ff6b7a;
   border: 1px solid rgba(255, 71, 87, 0.25);
+}
+
+/* ─── Phase-wide inputs panel (shared by all enemies of a phase) ─── */
+#enemy-forms-container .phase-inputs-panel {
+  flex: 1 1 100%;
+  max-width: 100%;
+  border: 1px dashed rgba(99, 179, 237, 0.35);
+  background: linear-gradient(135deg, rgba(99, 179, 237, 0.07) 0%, rgba(45, 55, 72, 0.45) 100%);
+  align-items: stretch;
+  text-align: left;
+}
+
+.phase-inputs-panel .phase-inputs-title {
+  margin: 0 0 4px 0;
+  font-size: 1rem;
+  color: #e2e8f0;
+}
+
+.phase-inputs-panel .phase-inputs-note {
+  margin: 0 0 12px 0;
+  font-size: 0.78rem;
+  color: var(--color-text-muted);
+}
+
+.phase-inputs-panel .phase-inputs-group {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+  width: 100%;
+}
+
+.phase-inputs-panel .form-group label {
+  text-align: left;
+}
+
+/* ─── Search bar clear (×) button ─── */
+.search-bar-wrapper {
+  position: relative;
+}
+
+.search-input {
+  padding-right: 38px;
+}
+
+/* Shared style for the two circular × buttons.
+   The × is DRAWN with two bars (::before/::after) instead of a glyph — the
+   ✕/↺ dingbats are not part of the Inter font and render inconsistently.
+   Base position is relative (anchors the bars); the search × overrides it
+   to float over the input, while the defeat ✕ stays in the heading flow. */
+.search-clear-btn,
+.enemy-defeat-btn {
+  appearance: none;
+  -webkit-appearance: none;
+  position: relative;
+  width: 24px;
+  height: 24px;
+  border-radius: 50%;
+  cursor: pointer;
+  padding: 0;
+  margin: 0;
+  line-height: 1;
+  color: #e2e8f0;
+  flex-shrink: 0;
+  z-index: 1;
+  -webkit-tap-highlight-color: transparent;
+  transition: background-color 0.15s ease, border-color 0.15s ease, color 0.15s ease;
+}
+
+.search-clear-btn {
+  position: absolute;
+  right: 10px;
+  top: 50%;
+  transform: translateY(-50%);
+  border: 1px solid rgba(255, 255, 255, 0.25);
+  background: rgba(45, 55, 72, 0.9);
+}
+
+.search-clear-btn:hover {
+  background: rgba(255, 71, 87, 0.35);
+  border-color: rgba(255, 71, 87, 0.6);
+  color: #fff;
+}
+
+/* crisp, font-independent × drawn with two rotated bars */
+.search-clear-btn::before,
+.search-clear-btn::after,
+.enemy-defeat-btn::before,
+.enemy-defeat-btn::after {
+  content: '';
+  position: absolute;
+  top: 50%;
+  left: 50%;
+  width: 10px;
+  height: 1.6px;
+  border-radius: 1px;
+  background: currentColor;
+}
+
+.search-clear-btn::before,
+.enemy-defeat-btn::before {
+  transform: translate(-50%, -50%) rotate(45deg);
+}
+
+.search-clear-btn::after,
+.enemy-defeat-btn::after {
+  transform: translate(-50%, -50%) rotate(-45deg);
+}
+
+.search-clear-btn:active {
+  transform: translateY(-50%) scale(0.9);
+}
+
+.enemy-defeat-btn:active {
+  transform: scale(0.9);
+}
+
+.search-clear-btn:focus-visible,
+.enemy-defeat-btn:focus-visible,
+.defeated-resurrect-btn:focus-visible {
+  outline: 2px solid #63b3ed;
+  outline-offset: 2px;
+}
+
+/* ─── Defeated enemies (✕ defeat button + resurrect tray) ─── */
+.enemy-defeat-btn {
+  border: 1px solid rgba(255, 71, 87, 0.4);
+  background: rgba(255, 71, 87, 0.12);
+  color: #ff6b7a;
+}
+
+.enemy-defeat-btn:hover {
+  background: rgba(255, 71, 87, 0.45);
+  border-color: rgba(255, 71, 87, 0.7);
+  color: #fff;
+}
+
+.defeated-tray {
+  flex: 1 1 100%;
+  max-width: 100%;
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 8px;
+  padding: 10px 14px;
+  margin-bottom: 2px;
+  border: 1px dashed rgba(255, 71, 87, 0.35);
+  border-radius: 12px;
+  background: rgba(255, 71, 87, 0.05);
+}
+
+.defeated-tray-title {
+  font-size: 0.8rem;
+  color: var(--color-text-muted);
+}
+
+.defeated-chip {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  padding: 4px 8px;
+  border-radius: 999px;
+  background: rgba(255, 71, 87, 0.12);
+  border: 1px solid rgba(255, 71, 87, 0.3);
+  font-size: 0.78rem;
+  color: var(--color-text);
+}
+
+/* Resurrect icon: inline SVG (rotate-ccw) instead of the ↺ glyph — the glyph
+   is not part of Inter and renders inconsistently across platforms. */
+.defeated-resurrect-btn {
+  appearance: none;
+  -webkit-appearance: none;
+  width: 22px;
+  height: 22px;
+  border-radius: 50%;
+  border: 1px solid rgba(99, 179, 237, 0.5);
+  background-color: rgba(99, 179, 237, 0.15);
+  background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24' fill='none' stroke='%2390cdf4' stroke-width='2.5' stroke-linecap='round' stroke-linejoin='round'%3E%3Cpolyline points='1 4 1 10 7 10'/%3E%3Cpath d='M3.51 15a9 9 0 1 0 2.13-9.36L1 10'/%3E%3C/svg%3E");
+  background-repeat: no-repeat;
+  background-position: center;
+  background-size: 12px 12px;
+  cursor: pointer;
+  padding: 0;
+  margin: 0;
+  -webkit-tap-highlight-color: transparent;
+  transition: background-color 0.15s ease, border-color 0.15s ease;
+}
+
+.defeated-resurrect-btn:hover {
+  background-color: rgba(99, 179, 237, 0.45);
+  border-color: rgba(99, 179, 237, 0.7);
+  background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24' fill='none' stroke='%23ffffff' stroke-width='2.5' stroke-linecap='round' stroke-linejoin='round'%3E%3Cpolyline points='1 4 1 10 7 10'/%3E%3Cpath d='M3.51 15a9 9 0 1 0 2.13-9.36L1 10'/%3E%3C/svg%3E");
 }

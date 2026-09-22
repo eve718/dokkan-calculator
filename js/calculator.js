@@ -73,27 +73,8 @@ function calculateEnemyATK(formulaId, inputs) {
 function calculateATK(enemy, enemyFormElement) {
     if (!enemy || !enemy.id) return;
 
-    // Collect inputs
-    const inputs = {};
-    if (enemy.inputs && Array.isArray(enemy.inputs)) {
-        for (const input of enemy.inputs) {
-            const el = enemyFormElement
-                ? (enemyFormElement.querySelector(`[id="${AppConfig.idPatterns.input(enemy.id, input.id)}"]`) ||
-                   document.getElementById(AppConfig.idPatterns.input(enemy.id, input.id)))
-                : AppConfig.getInputElement(enemy.id, input.id);
-
-            if (!el) {
-                inputs[input.id] = input.default ?? AppConfig.defaults.emptyInputValue;
-            } else if (input.type === 'checkbox') {
-                inputs[input.id] = el.checked;
-            } else {
-                const raw = el.value.trim();
-                inputs[input.id] = raw === ''
-                    ? (input.default ?? AppConfig.defaults.emptyInputValue)
-                    : (parseFloat(raw) || 0);
-            }
-        }
-    }
+    // Collect inputs: the enemy's own fields plus phase-wide (global) inputs
+    const inputs = collectEnemyInputValues(enemy, enemyFormElement);
 
     const results    = calculateEnemyATK(enemy.formula, inputs);
     const currentMode = AppConfig.getMode();
@@ -117,9 +98,11 @@ function calculateATK(enemy, enemyFormElement) {
             const item = document.createElement('div');
             item.className = 'result-value';
 
+            const dynamicLabel = (results._labels && results._labels[output.id]) ? results._labels[output.id] : null;
+
             const lbl = document.createElement('div');
             lbl.className = 'result-value-label';
-            lbl.textContent = output.label || 'Result';
+            lbl.textContent = dynamicLabel || output.label || 'Result';
 
             const amt = document.createElement('div');
             amt.className = 'result-value-amount';
@@ -134,7 +117,7 @@ function calculateATK(enemy, enemyFormElement) {
     }
 
     // Always keep damage values fresh so switching to damage mode shows current results
-    calculateDamage(enemy);
+    calculateDamage(enemy, enemyFormElement);
 }
 
 /**
@@ -144,10 +127,10 @@ function calculateATK(enemy, enemyFormElement) {
  * @param {number} min - Minimum allowed value
  * @param {number} max - Maximum allowed value
  * @param {number} defaultValue - Value to use if input is empty
- * @param {Object} enemy - Enemy data object
+ * @param {Function} onRecalc - Recalculation callback (enemy or phase-wide)
  */
-function validateAndCorrectInput(inputElement, min, max, defaultValue, enemy) {
-    if (!inputElement || !enemy) {
+function validateAndCorrectInput(inputElement, min, max, defaultValue, onRecalc) {
+    if (!inputElement || typeof onRecalc !== 'function') {
         console.error('validateAndCorrectInput: missing required parameters');
         return;
     }
@@ -157,7 +140,7 @@ function validateAndCorrectInput(inputElement, min, max, defaultValue, enemy) {
     // Handle empty input
     if (value === '') {
         inputElement.style.borderColor = AppConfig.inputValidation.normalBorderColor;
-        calculateATK(enemy);
+        onRecalc();
         return;
     }
 
@@ -167,7 +150,7 @@ function validateAndCorrectInput(inputElement, min, max, defaultValue, enemy) {
     if (isNaN(value)) {
         inputElement.value = '';
         inputElement.style.borderColor = AppConfig.inputValidation.normalBorderColor;
-        calculateATK(enemy);
+        onRecalc();
         return;
     }
 
@@ -181,7 +164,7 @@ function validateAndCorrectInput(inputElement, min, max, defaultValue, enemy) {
 
     // Clear error styling and recalculate
     inputElement.style.borderColor = AppConfig.inputValidation.normalBorderColor;
-    calculateATK(enemy);
+    onRecalc();
 }
 
 /**
@@ -189,8 +172,9 @@ function validateAndCorrectInput(inputElement, min, max, defaultValue, enemy) {
  * Reads character inputs from the shared panel, runs the enemy's ATK formula
  * with current enemy-form inputs, then applies all defence modifiers.
  * @param {Object} enemy - Enemy data object
+ * @param {HTMLElement} enemyFormElement - Optional form scope for detached renders
  */
-function calculateDamage(enemy) {
+function calculateDamage(enemy, enemyFormElement) {
     if (!enemy || !enemy.id) return;
 
     // --- Character inputs (shared panel, plain IDs) ---
@@ -204,21 +188,8 @@ function calculateDamage(enemy) {
         char_passive_guard:   parseCharInputValue('char_passive_guard',   false),
     };
 
-    // --- Enemy ATK values: re-run formula with current enemy-form inputs ---
-    const enemyInputs = {};
-    if (enemy.inputs && Array.isArray(enemy.inputs)) {
-        for (const input of enemy.inputs) {
-            const el = AppConfig.getInputElement(enemy.id, input.id);
-            if (!el) {
-                enemyInputs[input.id] = input.default ?? AppConfig.defaults.emptyInputValue;
-            } else if (input.type === 'checkbox') {
-                enemyInputs[input.id] = el.checked;
-            } else {
-                const raw = el.value.trim();
-                enemyInputs[input.id] = raw === '' ? (input.default ?? 0) : (parseFloat(raw) || 0);
-            }
-        }
-    }
+    // --- Enemy ATK values: re-run formula with current enemy + phase-wide inputs ---
+    const enemyInputs = collectEnemyInputValues(enemy, enemyFormElement);
     const enemyAtkResults = calculateEnemyATK(enemy.formula, enemyInputs);
 
     // --- Enemy properties: type/class from typeIcon, DEF-ignore from output labels ---
@@ -229,11 +200,12 @@ function calculateDamage(enemy) {
     };
     if (enemy.outputs && Array.isArray(enemy.outputs)) {
         for (const output of enemy.outputs) {
-            const defIgnorePct = extractDefIgnoreFromLabel(output.label);
+            const dynamicLabel = (enemyAtkResults._labels && enemyAtkResults._labels[output.id]) ? enemyAtkResults._labels[output.id] : output.label;
+            const defIgnorePct = extractDefIgnoreFromLabel(dynamicLabel);
             if (defIgnorePct > 0) {
                 enemyProps[output.id + '_def_ignore'] = defIgnorePct; // raw %
             }
-            const defLowerPct = extractDefLowerFromLabel(output.label);
+            const defLowerPct = extractDefLowerFromLabel(dynamicLabel);
             if (defLowerPct > 0) {
                 enemyProps[output.id + '_def_lower'] = defLowerPct; // raw %
             }
@@ -255,7 +227,7 @@ function calculateDamage(enemy) {
         }
     }
 
-    displayDamageResults(enemy, damageResults);
+    displayDamageResults(enemy, damageResults, enemyAtkResults);
 }
 
 /**
@@ -305,8 +277,9 @@ function getDamageTakenFormula(formulaId) {
  * Uses the enemy's own output definitions for human-readable labels.
  * @param {Object} enemy - Enemy data object
  * @param {Object} damageResults - { normal_damage: n, super_damage: n, … }
+ * @param {Object} enemyAtkResults - The ATK calculation results to get dynamic labels
  */
-function displayDamageResults(enemy, damageResults) {
+function displayDamageResults(enemy, damageResults, enemyAtkResults) {
     const container = document.getElementById('damage-results-section')
         || AppConfig.currentDamageResultsSection;
     if (!container) return;
@@ -350,12 +323,12 @@ function displayDamageResults(enemy, damageResults) {
         valuesGrid.appendChild(msg);
     } else {
         for (const [damageKey, value] of Object.entries(damageResults)) {
-            // Derive label from the matching ATK output definition — keep ATK in label
             const atkOutputId = damageKey.replace(/_damage(\d*)$/, '_atk$1');
             const matchingOutput = enemy.outputs?.find(o => o.id === atkOutputId);
-            const labelText = matchingOutput
-                ? matchingOutput.label
-                : damageKey.replace(/_/g, ' ');
+            const baseLabel = matchingOutput ? matchingOutput.label : damageKey.replace(/_/g, ' ');
+            const labelText = (enemyAtkResults && enemyAtkResults._labels && enemyAtkResults._labels[atkOutputId]) 
+                ? enemyAtkResults._labels[atkOutputId] 
+                : baseLabel;
 
             const card = document.createElement('div');
             card.style.backgroundColor = 'rgba(26, 32, 44, 0.7)';
@@ -447,16 +420,16 @@ function extractDefLowerFromLabel(label) {
  * @param {number} min - Minimum allowed value
  * @param {number} max - Maximum allowed value
  * @param {number} defaultValue - Default value if input is empty
- * @param {Object} enemy - Enemy data object
+ * @param {Function} onRecalc - Recalculation callback (enemy or phase-wide)
  */
-function setupInputValidation(inputField, min, max, defaultValue, enemy) {
+function setupInputValidation(inputField, min, max, defaultValue, onRecalc) {
     if (!inputField) {
         console.error('setupInputValidation: inputField is required');
         return;
     }
 
-    if (!enemy) {
-        console.error('setupInputValidation: enemy is required');
+    if (typeof onRecalc !== 'function') {
+        console.error('setupInputValidation: onRecalc callback is required');
         return;
     }
 
@@ -473,7 +446,7 @@ function setupInputValidation(inputField, min, max, defaultValue, enemy) {
         // Empty input: use default and recalculate immediately
         if (value === '') {
             this.style.borderColor = AppConfig.inputValidation.normalBorderColor;
-            calculateATK(enemy);
+            onRecalc();
             return;
         }
 
@@ -482,19 +455,19 @@ function setupInputValidation(inputField, min, max, defaultValue, enemy) {
         // Valid number within range: recalculate immediately
         if (!isNaN(numValue) && numValue >= min && numValue <= max) {
             this.style.borderColor = AppConfig.inputValidation.normalBorderColor;
-            calculateATK(enemy);
+            onRecalc();
         } else {
             // Invalid value: show error styling and schedule correction
             this.style.borderColor = AppConfig.inputValidation.errorBorderColor;
             validationTimeout = setTimeout(() => {
-                validateAndCorrectInput(this, min, max, defaultValue, enemy);
+                validateAndCorrectInput(this, min, max, defaultValue, onRecalc);
             }, AppConfig.inputCorrectionDelay);
         }
     });
 
     // Validate when user leaves the field
     inputField.addEventListener('blur', function () {
-        validateAndCorrectInput(this, min, max, defaultValue, enemy);
+        validateAndCorrectInput(this, min, max, defaultValue, onRecalc);
     });
 }
 
@@ -529,7 +502,7 @@ function setupCharacterInputListeners() {
         const recalcAll = debounce(() => {
             document.querySelectorAll('[id^="enemy-form-"]').forEach(form => {
                 const enemy = findEnemyById(form.id.replace('enemy-form-', ''));
-                if (enemy) calculateDamage(enemy);
+                if (enemy) calculateDamage(enemy, enemyForm);
             });
         }, 150);
 
@@ -552,8 +525,10 @@ function findEnemyById(enemyId) {
     for (const event of gameData.events) {
         if (!event.stages) continue;
         for (const stage of event.stages) {
-            if (!stage.battles) continue;
-            for (const battle of stage.battles) {
+            const battles = stage.battles && stage.battles.length
+                ? stage.battles
+                : [{ phases: stage.phases || [] }];
+            for (const battle of battles) {
                 if (!battle.phases) continue;
                 for (const phase of battle.phases) {
                     if (!phase.enemies) continue;
@@ -565,6 +540,180 @@ function findEnemyById(enemyId) {
         }
     }
     return null;
+}
+
+/**
+ * Find the phase object that contains a given enemy.
+ * Used to resolve phase-wide (global) inputs for an enemy.
+ * @param {string} enemyId - The enemy ID to search for
+ * @returns {Object|null} Phase object or null
+ */
+function findPhaseByEnemyId(enemyId) {
+    if (!gameData || !gameData.events) return null;
+
+    for (const event of gameData.events) {
+        if (!event.stages) continue;
+        for (const stage of event.stages) {
+            // Legacy shape: stages may carry phases directly (no battles array)
+            const battles = (stage.battles && stage.battles.length)
+                ? stage.battles
+                : [{ phases: stage.phases || [] }];
+            for (const battle of battles) {
+                for (const phase of battle.phases || []) {
+                    if ((phase.enemies || []).some(e => e && String(e.id) === String(enemyId))) {
+                        return phase;
+                    }
+                }
+            }
+        }
+    }
+    return null;
+}
+
+/**
+ * Recalculate every non-defeated enemy of the phase.
+ * Called when a phase-wide input changes (it affects all enemies at once).
+ * Defeated enemies are skipped — their cards are removed from the page.
+ * @param {Object} phase - Phase data object
+ */
+function recalculatePhaseEnemies(phase) {
+    if (!phase || !Array.isArray(phase.enemies)) return;
+    phase.enemies.forEach(enemy => {
+        if (enemy && enemy.id && !isEnemyDefeated(phase.id, enemy.id)) calculateATK(enemy);
+    });
+}
+
+/**
+ * Top-most ancestor of an element. Needed because pages are rendered into a
+ * detached container first (performPageTransition) — document.getElementById
+ * cannot see detached nodes, but the detached root can be queried directly.
+ * @param {HTMLElement} el - Any element in the (possibly detached) tree
+ * @returns {HTMLElement|null} Root element or null
+ */
+function getDomRoot(el) {
+    let root = el;
+    while (root && root.parentElement) root = root.parentElement;
+    return root;
+}
+
+/**
+ * Read one input definition's value from the DOM.
+ * @param {Object} def - Input definition (id, type, default)
+ * @param {string} ownerId - Enemy or phase id (DOM id prefix)
+ * @param {HTMLElement|null} scopeEl - Tree to query first (works when detached)
+ * @returns {*} Parsed value or the definition's default
+ */
+function readInputValue(def, ownerId, scopeEl) {
+    const domId = AppConfig.idPatterns.input(ownerId, def.id);
+    const el = (scopeEl && scopeEl.querySelector(`[id="${domId}"]`))
+        || document.getElementById(domId);
+    if (!el) return def.default ?? AppConfig.defaults.emptyInputValue;
+    if (def.type === 'checkbox') return el.checked;
+    const raw = el.value.trim();
+    if (raw === '') return def.default ?? AppConfig.defaults.emptyInputValue;
+    const parsed = parseFloat(raw);
+    return isNaN(parsed) ? (def.default ?? AppConfig.defaults.emptyInputValue) : parsed;
+}
+
+/**
+ * Collect input values for an enemy: its own inputs plus the phase-wide
+ * (global) inputs of the phase it belongs to. Global values live in elements
+ * namespaced by the phase id ("${phase.id}_${input.id}") and are merged into
+ * the same flat object that is handed to the ATK formula.
+ * @param {Object} enemy - Enemy data object
+ * @param {HTMLElement|null} enemyFormElement - Enemy form element (optional;
+ *        enables lookup inside a detached DOM tree)
+ * @returns {Object} Merged input values keyed by input id
+ */
+function collectEnemyInputValues(enemy, enemyFormElement) {
+    const values = {};
+    if (!enemy) return values;
+
+    const scopeEl = enemyFormElement ? getDomRoot(enemyFormElement) : null;
+    const phase = findPhaseByEnemyId(enemy.id);
+
+    (phase && Array.isArray(phase.globalInputs) ? phase.globalInputs : [])
+        .forEach(def => { if (def && def.id) values[def.id] = readInputValue(def, phase.id, scopeEl); });
+
+    // Defeat flags: every enemy defeated in this phase is queryable from any
+    // remaining enemy's formula as  inputs.defeated_<enemyId> === true
+    // (e.g. ally-death passives). Keys are injected, not user-visible fields.
+    (phase ? getDefeatedEnemyIds(phase.id) : [])
+        .forEach(id => { values['defeated_' + id] = true; });
+
+    (enemy.inputs && Array.isArray(enemy.inputs) ? enemy.inputs : [])
+        .forEach(def => { if (def && def.id) values[def.id] = readInputValue(def, enemy.id, scopeEl); });
+
+    return values;
+}
+
+/**
+ * Input definitions for an enemy (phase-wide first, then its own), used for
+ * human-readable labels (e.g. clipboard output). Deduplicated by id; an
+ * enemy's own definition wins over the phase-wide one.
+ * @param {Object} enemy - Enemy data object
+ * @returns {Array} Input definitions
+ */
+function collectEnemyInputDefs(enemy) {
+    const phase = enemy ? findPhaseByEnemyId(enemy.id) : null;
+    const defs = [];
+    const seen = new Set();
+
+    (phase && Array.isArray(phase.globalInputs) ? phase.globalInputs : []).forEach(def => {
+        if (def && def.id && !seen.has(def.id)) { seen.add(def.id); defs.push(def); }
+    });
+    ((enemy && enemy.inputs) || []).forEach(def => {
+        if (def && def.id && !seen.has(def.id)) { seen.add(def.id); defs.push(def); }
+    });
+    return defs;
+}
+
+// ─── Defeated enemies (per-phase session state) ───────────────────────────────
+
+const DEFEATED_KEY_PREFIX = 'dokkan_defeated_';
+
+function getDefeatedKey(phaseId) {
+    return DEFEATED_KEY_PREFIX + phaseId;
+}
+
+/**
+ * Ids of the enemies marked as defeated in a phase.
+ * Persisted in sessionStorage so the state survives phase navigation and
+ * reloads within the same browser session (a new session = a new fight).
+ * @param {string} phaseId
+ * @returns {string[]}
+ */
+function getDefeatedEnemyIds(phaseId) {
+    try {
+        const raw = sessionStorage.getItem(getDefeatedKey(phaseId));
+        const arr = raw ? JSON.parse(raw) : [];
+        return Array.isArray(arr) ? arr.map(String) : [];
+    } catch {
+        return [];
+    }
+}
+
+/** True when an enemy is currently marked as defeated in its phase. */
+function isEnemyDefeated(phaseId, enemyId) {
+    return getDefeatedEnemyIds(phaseId).includes(String(enemyId));
+}
+
+/**
+ * Marks an enemy as defeated: it disappears from the phase page and every
+ * remaining enemy's formula receives  inputs.defeated_<enemyId> = true.
+ */
+function defeatEnemy(phaseId, enemyId) {
+    const ids = getDefeatedEnemyIds(phaseId);
+    if (!ids.includes(String(enemyId))) {
+        ids.push(String(enemyId));
+        try { sessionStorage.setItem(getDefeatedKey(phaseId), JSON.stringify(ids)); } catch { /* ignore */ }
+    }
+}
+
+/** Undoes a defeat (resurrect): the enemy card is rendered again. */
+function resurrectEnemy(phaseId, enemyId) {
+    const ids = getDefeatedEnemyIds(phaseId).filter(id => id !== String(enemyId));
+    try { sessionStorage.setItem(getDefeatedKey(phaseId), JSON.stringify(ids)); } catch { /* ignore */ }
 }
 
 // ─── Standalone Damage Calculator ─────────────────────────────────────────────

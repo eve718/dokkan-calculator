@@ -14,14 +14,13 @@
   - `idPatterns` - ID generation functions
   - `inputValidation` - Form validation settings
   - `defaults` - Default values
-  - Helper methods: `getInputElement()`, `getOutputElement()`
+    - Helper method: `getInputElement()`
 
 **Key Constants Added:**
 ```javascript
 pageTransitionDuration: 300        // Used in navigation.js (3 places)
 inputDebounceDelay: 500            // Debounce timing
 inputCorrectionDelay: 800          // Auto-correct timing
-retryCheckDelay: 100               // Retry interval for DOM element lookups
 ```
 
 ---
@@ -254,8 +253,8 @@ No formula not found messages
 ```bash
 npm run obfuscate
 # Generates:
-# - js/data-obfuscated.js
-# - js/formulas-obfuscated.js
+# - dist/data-obfuscated.js
+# - dist/formulas-obfuscated.js
 # - js/config.js (UNCHANGED - not obfuscated)
 ```
 

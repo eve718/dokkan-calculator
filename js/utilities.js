@@ -1,8 +1,7 @@
 /**
  * Utilities Module - Shared Functionality
  * 
- * Handles favorites system, theme management, clipboard operations,
- * image export, and onboarding features
+ * Handles clipboard operations and onboarding features.
  */
 
 /**

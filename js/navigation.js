@@ -1,3 +1,254 @@
+function getAllBossEntries() {
+    const entries = [];
+    for (const event of gameData.events || []) {
+        for (const stage of event.stages || []) {
+            const battles = stage.battles && stage.battles.length
+                ? stage.battles
+                : [{ id: 'legacy-battle', name: 'Battle', phases: stage.phases || [] }];
+            for (const battle of battles) {
+                for (const phase of battle.phases || []) {
+                    for (const enemy of phase.enemies || []) {
+                        entries.push({ event, stage, battle, phase, enemy });
+                    }
+                }
+            }
+        }
+    }
+    return entries;
+}
+
+function getRecentBossEntries() {
+    const selected = new Map();
+    const types = ['STR', 'PHY', 'INT', 'TEQ', 'AGL'];
+    const classes = ['Super', 'Extreme'];
+    const events = [...(gameData.events || [])].reverse();
+
+    for (const event of events) {
+        const stages = [...(event.stages || [])].filter(stage => stage.visible !== false).reverse();
+        for (const stage of stages) {
+            const battles = stage.battles && stage.battles.length
+                ? stage.battles
+                : [{ id: 'legacy-battle', name: 'Battle', phases: stage.phases || [] }];
+            // Only the last battle of this stage is eligible. If it cannot
+            // provide a missing type/class pair, try the previous stage.
+            const battle = battles.at(-1);
+            const phase = battle?.phases?.at(-1);
+            // Recent-mode representatives always use the first enemy in the
+            // final phase; later enemies in a multi-enemy phase are ignored.
+            const enemy = phase?.enemies?.[0];
+            if (!enemy) continue;
+            const info = getEnemyInfoFromIcon(enemy.typeIcon);
+            const key = `${info.type}_${info.class}`;
+            if (!types.includes(info.type) || !classes.includes(info.class) || selected.has(key)) continue;
+            const defaults = {};
+            for (const input of getBossInputDefinitions({ phase, enemy })) defaults[input.id] = input.default ?? 0;
+            const standard = calculateEnemyATK(enemy.formula, defaults);
+            const hasEnoughDamage = Object.entries(standard).some(([id, value]) =>
+                id !== '_labels' && typeof value === 'number' && value > 0
+            );
+            if (hasEnoughDamage) selected.set(key, { event, stage, battle, phase, enemy, type: info.type, class: info.class });
+        }
+    }
+
+    return types.flatMap(type => classes.map(enemyClass => selected.get(`${type}_${enemyClass}`)).filter(Boolean));
+}
+
+function bossSearchMatches(entry, query) {
+    const haystack = [
+        entry.enemy.name,
+        entry.event.name,
+        entry.stage.name,
+        entry.battle.name,
+        entry.phase.name,
+        getEnemyInfoFromIcon(entry.enemy.typeIcon).type,
+        getEnemyInfoFromIcon(entry.enemy.typeIcon).class,
+        entry.enemy.rarityIcon,
+    ].join(' ').toLowerCase();
+    return (query || '').toLowerCase().trim().split(/\s+/).filter(Boolean).every(term => haystack.includes(term));
+}
+
+function getPassiveCandidates(input) {
+    if (input.type === 'checkbox') return [false, true];
+    if (input.type === 'select' && Array.isArray(input.options)) return [...input.options];
+    const values = new Set([input.default ?? 0]);
+    if (input.min !== undefined) values.add(input.min);
+    if (input.max !== undefined && isFinite(input.max)) values.add(input.max);
+    return [...values];
+}
+
+function getAttackScore(results) {
+    return Object.entries(results || {}).reduce((total, [id, value]) => {
+        return id === '_labels' || typeof value !== 'number' ? total : total + Math.max(0, value);
+    }, 0);
+}
+
+function findFullPassiveInputs(entry) {
+    const definitions = getBossInputDefinitions(entry);
+    const inputs = {};
+    definitions.forEach(input => { inputs[input.id] = input.default ?? (input.type === 'checkbox' ? false : 0); });
+
+    const candidates = definitions.map(input => ({ input, values: getPassiveCandidates(input) }));
+    const combinations = candidates.reduce((total, item) => total * item.values.length, 1);
+    let bestScore = -1;
+    let bestInputs = { ...inputs };
+    const evaluate = trial => {
+        const score = getAttackScore(calculateEnemyATK(entry.enemy.formula, trial));
+        if (score > bestScore) {
+            bestScore = score;
+            bestInputs = { ...trial };
+        }
+    };
+
+    if (combinations <= 4096) {
+        const visit = (index, trial) => {
+            if (index === candidates.length) {
+                evaluate(trial);
+                return;
+            }
+            const { input, values } = candidates[index];
+            values.forEach(value => visit(index + 1, { ...trial, [input.id]: value }));
+        };
+        visit(0, inputs);
+        return bestInputs;
+    }
+
+    // Coordinate search keeps larger presets deterministic without a
+    // combinatorial explosion for phases with many independent inputs.
+    bestScore = getAttackScore(calculateEnemyATK(entry.enemy.formula, inputs));
+    let improved = true;
+    while (improved) {
+        improved = false;
+        for (const input of definitions) {
+            let bestValue = inputs[input.id];
+            for (const candidate of getPassiveCandidates(input)) {
+                const trial = { ...inputs, [input.id]: candidate };
+                const score = getAttackScore(calculateEnemyATK(entry.enemy.formula, trial));
+                if (score > bestScore) {
+                    bestScore = score;
+                    bestValue = candidate;
+                    improved = true;
+                }
+            }
+            inputs[input.id] = bestValue;
+        }
+    }
+    return inputs;
+}
+
+function getBossInputDefinitions(entry) {
+    const definitions = [];
+    const seen = new Set();
+    for (const input of [...(entry.phase?.globalInputs || []), ...(entry.enemy.inputs || [])]) {
+        if (input?.id && !seen.has(input.id)) {
+            seen.add(input.id);
+            definitions.push(input);
+        }
+    }
+    return definitions;
+}
+
+function readBossInputs(entry, scope, overrides = {}) {
+    return { ...collectEnemyInputValues(entry.enemy, scope), ...overrides };
+}
+
+function calculateBossDamage(entry, scope, characterInputs, overrides = {}) {
+    const enemyAttackResults = calculateEnemyATK(entry.enemy.formula, readBossInputs(entry, scope, overrides));
+    const enemyInfo = getEnemyInfoFromIcon(entry.enemy.typeIcon);
+    const enemyProperties = { enemy_type: enemyInfo.type, enemy_class: enemyInfo.class };
+    for (const output of entry.enemy.outputs || []) {
+        const label = enemyAttackResults._labels?.[output.id] || output.label || '';
+        const defIgnore = extractDefIgnoreFromLabel(label);
+        const defLower = extractDefLowerFromLabel(label);
+        if (defIgnore > 0) enemyProperties[output.id + '_def_ignore'] = defIgnore;
+        if (defLower > 0) enemyProperties[output.id + '_def_lower'] = defLower;
+    }
+    const formula = getDamageTakenFormula(entry.enemy.formula);
+    const damageResults = formula ? formula({ characterInputs, enemyAttackResults, enemyProperties }) : {};
+    return { enemyAttackResults, damageResults };
+}
+
+function createBossMeta(entry) {
+    const meta = document.createElement('p');
+    meta.className = 'dc-boss-meta';
+    const path = [entry.event.name, entry.stage.name];
+    if ((entry.stage.battles || []).length > 1) path.push(entry.battle.name);
+    path.push(entry.phase.name);
+    meta.textContent = path.join(' / ');
+    return meta;
+}
+
+function createBossPhaseLink(entry) {
+    const link = document.createElement('a');
+    link.href = '#';
+    link.className = 'dc-boss-image-link';
+    link.title = `Open ${entry.phase.name}`;
+    link.setAttribute('aria-label', `Open ${entry.enemy.name} in ${entry.phase.name}`);
+    link.addEventListener('click', event => {
+        event.preventDefault();
+        showPage('enemies', entry.event.id, entry.stage.id, entry.battle.id, entry.phase.id);
+    });
+    return link;
+}
+
+function renderBossDamageCard(container, entry, damageResults, enemyAttackResults, titleSuffix = '', linkImage = false) {
+    const card = document.createElement('article');
+    card.className = 'dc-boss-result';
+
+    const heading = document.createElement('h3');
+    heading.textContent = entry.enemy.name + titleSuffix;
+    card.appendChild(heading);
+    card.appendChild(createBossMeta(entry));
+
+    const visualRow = document.createElement('div');
+    visualRow.className = 'dc-boss-visual-row';
+    const image = createEnemyImageContainer(entry.enemy);
+    if (linkImage) {
+        const imageLink = createBossPhaseLink(entry);
+        imageLink.appendChild(image);
+        visualRow.appendChild(imageLink);
+    } else {
+        visualRow.appendChild(image);
+    }
+    const values = createBossDamageValues(entry, damageResults, enemyAttackResults);
+    visualRow.appendChild(values);
+    card.appendChild(visualRow);
+    container.appendChild(card);
+    return card;
+}
+
+function createBossDamageValues(entry, damageResults, enemyAttackResults) {
+    const values = document.createElement('div');
+    values.className = 'dc-boss-damage-values';
+    for (const [damageKey, value] of Object.entries(damageResults || {})) {
+        const atkId = damageKey.replace(/_damage(\d*)$/, '_atk$1');
+        const output = (entry.enemy.outputs || []).find(item => item.id === atkId);
+        const item = document.createElement('div');
+        item.className = 'dc-boss-damage-item';
+        const label = document.createElement('span');
+        label.textContent = enemyAttackResults?._labels?.[atkId] || output?.label || damageKey.replace(/_/g, ' ');
+        const amount = document.createElement('strong');
+        amount.textContent = `${formatDmgRange(value)} DMG`;
+        item.appendChild(label);
+        item.appendChild(amount);
+        values.appendChild(item);
+    }
+    return values;
+}
+
+function createBossInputPanel(entry, onChange) {
+    const panel = document.createElement('div');
+    panel.className = 'dc-boss-inputs';
+    const title = document.createElement('p');
+    title.className = 'dc-section-label';
+    title.textContent = 'Boss inputs';
+    panel.appendChild(title);
+    for (const input of getBossInputDefinitions(entry)) {
+        const isGlobal = (entry.phase?.globalInputs || []).some(item => item.id === input.id);
+        const group = createInputField(isGlobal ? entry.phase.id : entry.enemy.id, input, onChange);
+        if (group) panel.appendChild(group);
+    }
+    return panel;
+}
 /**
  * Navigation Module - Single Page Application Routing
  * 
@@ -14,6 +265,8 @@ const NavigationState = {
     currentEventId: null,
     currentStageId: null,
     currentBattleId: null,
+    currentPhaseId: null,
+    currentSearch: '',      // last search-bar query — persists across page changes
     currentContentView: null,
 
     update(updates) {
@@ -65,6 +318,18 @@ function setupCardTooltip(card, tooltipText) {
     
     card.addEventListener('mouseleave', () => {
         tooltip.style.display = 'none';
+    });
+}
+
+function makeInteractiveCard(card, onActivate) {
+    card.setAttribute('role', 'button');
+    card.tabIndex = 0;
+    card.addEventListener('click', onActivate);
+    card.addEventListener('keydown', (event) => {
+        if (event.key === 'Enter' || event.key === ' ') {
+            event.preventDefault();
+            onActivate();
+        }
     });
 }
 
@@ -123,7 +388,7 @@ function isSingleBattleStage() {
  * @param {string|null} stageId - Selected stage ID
  * @param {string|null} battleId - Selected battle ID
  */
-function showPage(page, eventId = null, stageId = null, battleId = null) {
+function showPage(page, eventId = null, stageId = null, battleId = null, phaseId = null) {
     // Validate page type
     const validPages = ['events', 'stages', 'battles', 'enemies', 'damage-calculator'];
     if (!validPages.includes(page)) {
@@ -136,7 +401,8 @@ function showPage(page, eventId = null, stageId = null, battleId = null) {
         currentPage: page,
         currentEventId: eventId,
         currentStageId: stageId,
-        currentBattleId: battleId
+        currentBattleId: battleId,
+        currentPhaseId: phaseId
     });
 
     // Update breadcrumb and get content container
@@ -164,7 +430,7 @@ function showPage(page, eventId = null, stageId = null, battleId = null) {
             showBattlesPage(newContent, eventId, stageId);
             break;
         case 'enemies':
-            showEnemiesPage(newContent, eventId, stageId, battleId);
+            showEnemiesPage(newContent, eventId, stageId, battleId, phaseId);
             break;
         case 'damage-calculator':
             showDamageCalculatorPage(newContent);
@@ -337,7 +603,7 @@ function showEventsPage(container) {
     dcInfo.appendChild(dcDesc);
     dcToolCard.appendChild(dcIcon);
     dcToolCard.appendChild(dcInfo);
-    dcToolCard.addEventListener('click', () => showPage('damage-calculator'));
+    makeInteractiveCard(dcToolCard, () => showPage('damage-calculator'));
     toolsSection.appendChild(dcToolCard);
     container.appendChild(toolsSection);
     // ──────────────────────────────────────────────────────────────────────────
@@ -379,35 +645,29 @@ function showEventsPage(container) {
                 img.loading = 'lazy';
                 img.decoding = 'async';
                 img.width = 300;
-                img.height = 220;
+                img.height = 150;
                 card.appendChild(img);
             }
             
-            card.addEventListener('click', () => showPage('stages', event.id));
+            makeInteractiveCard(card, () => showPage('stages', event.id));
             setupCardTooltip(card, event.name);
             grid.appendChild(card);
         });
     };
 
-    renderEvents(events);
-    container.appendChild(grid);
-
-    // Add search functionality with comprehensive filtering
-    const searchInput = searchWrapper.querySelector('.search-input');
-    searchInput.addEventListener('input', debounce((e) => {
-        const query = e.target.value.toLowerCase().trim();
-        
-        // Search across events, stages, battles, and enemies
+    // Search across events, stages, battles, and enemies
+    const applyEventFilter = (rawQuery) => {
+        const query = (rawQuery || '').toLowerCase().trim();
         const filtered = events.filter(event => {
             if (searchMatches(event.name, query)) return true;
-            
+
             for (const stage of event.stages || []) {
                 if (searchMatches(stage.name, query)) return true;
-                
+
                 const battles = getStageBattles(stage);
                 for (const battle of battles) {
                     if (searchMatches(battle.name, query)) return true;
-                    
+
                     for (const phase of battle.phases || []) {
                         for (const enemy of phase.enemies || []) {
                             if (searchMatches(enemy.name, query)) return true;
@@ -417,9 +677,16 @@ function showEventsPage(container) {
             }
             return false;
         });
-        
         renderEvents(filtered);
-    }, 300));
+    };
+
+    // Re-apply the persisted query (if any) so a restored search bar always
+    // matches the rendered results
+    applyEventFilter(NavigationState.currentSearch);
+    container.appendChild(grid);
+
+    const searchInput = searchWrapper.querySelector('.search-input');
+    searchInput.addEventListener('input', debounce((e) => applyEventFilter(e.target.value), 300));
 
     const aboutSection = document.createElement('p');
     aboutSection.className = 'seo-about';
@@ -432,14 +699,46 @@ function showEventsPage(container) {
  * @param {string} placeholder - Placeholder text for the search input
  * @returns {HTMLElement} Wrapper div containing the search bar
  */
-function createSearchBar(placeholder) {
+function createSearchBar(placeholder, onSearch = null, persistState = true) {
     const wrapper = document.createElement('div');
     wrapper.className = 'search-bar-wrapper';
     const input = document.createElement('input');
     input.type = 'text';
     input.className = 'search-input';
     input.placeholder = placeholder;
+    // Persist the query across page navigation: pre-fill the last search and
+    // keep NavigationState updated on every keystroke, so re-rendered pages
+    // (which rebuild the search bar) restore both the text and its filter.
+    input.value = persistState ? (NavigationState.currentSearch || '') : '';
+
+    // "×" button — one click clears the query (and its persisted state) and
+    // re-applies the page filter via the input event.
+    const clearBtn = document.createElement('button');
+    clearBtn.type = 'button';
+    clearBtn.className = 'search-clear-btn';
+    clearBtn.title = 'Clear search';
+    clearBtn.setAttribute('aria-label', 'Clear search');
+    clearBtn.addEventListener('click', () => {
+        input.value = '';
+        if (persistState) NavigationState.currentSearch = '';
+        updateClearVisibility();
+        input.dispatchEvent(new Event('input', { bubbles: true }));
+        input.focus();
+    });
+
+    function updateClearVisibility() {
+        clearBtn.style.display = input.value ? 'flex' : 'none';
+    }
+
+    input.addEventListener('input', () => {
+        if (persistState) NavigationState.currentSearch = input.value;
+        if (onSearch) onSearch(input.value);
+        updateClearVisibility();
+    });
+
     wrapper.appendChild(input);
+    wrapper.appendChild(clearBtn);
+    updateClearVisibility();
     return wrapper;
 }
 
@@ -467,6 +766,25 @@ function showDamageCalculatorPage(container) {
     desc.textContent = "Enter the enemy's ATK and your character's stats to see how much damage you receive for every enemy type & class combination. All inputs are remembered for the current session.";
     container.appendChild(desc);
 
+    const modeBar = document.createElement('div');
+    modeBar.className = 'dc-mode-bar';
+    const modeTitle = document.createElement('span');
+    modeTitle.className = 'dc-mode-title';
+    modeTitle.textContent = 'Calculator mode';
+    modeBar.appendChild(modeTitle);
+    const modeButtons = {};
+    let activeMode = 'manual';
+    let runBossMode = () => {};
+    ['manual', 'recent', 'boss'].forEach(mode => {
+        const button = document.createElement('button');
+        button.type = 'button';
+        button.className = 'dc-mode-choice';
+        button.textContent = mode === 'manual' ? 'Damage Received' : mode === 'recent' ? 'Recent Events' : 'Choose a Boss';
+        modeButtons[mode] = button;
+        modeBar.appendChild(button);
+    });
+    container.appendChild(modeBar);
+
     // --- Session storage helpers ---
     const getStoredEnemy = (key, fallback) => {
         const v = sessionStorage.getItem('dcEnemy_' + key);
@@ -484,6 +802,7 @@ function showDamageCalculatorPage(container) {
     const panels = document.createElement('div');
     panels.className = 'dc-panels';
     container.appendChild(panels);
+    let bossWorkspace;
 
     // ── Enemy panel ────────────────────────────────────────────────────────────
     const enemyPanel = document.createElement('div');
@@ -860,6 +1179,10 @@ function showDamageCalculatorPage(container) {
     }
 
     function runCalculation() {
+        if (activeMode !== 'manual') {
+            runBossMode();
+            return;
+        }
         const ei = {
             enemy_atk:        parseFloat(atkInput.value)        || parseFloat(atkInput.placeholder)        || 0,
             enemy_def_lower:  parseFloat(defLowerInput.value)   || parseFloat(defLowerInput.placeholder)   || 0,
@@ -869,6 +1192,141 @@ function showDamageCalculatorPage(container) {
         const results = calculateStandaloneDamage(ei, readCharInputs());
         renderStandaloneDamageResults(resultsSection, results, critInput.checked);
     }
+
+    bossWorkspace = document.createElement('div');
+    bossWorkspace.className = 'dc-boss-workspace';
+    bossWorkspace.style.display = 'none';
+    container.appendChild(bossWorkspace);
+
+    const characterJumpButton = document.createElement('button');
+    characterJumpButton.type = 'button';
+    characterJumpButton.className = 'dc-character-jump';
+    characterJumpButton.textContent = '↑';
+    characterJumpButton.title = 'Back to Your Character';
+    characterJumpButton.setAttribute('aria-label', 'Back to Your Character');
+    characterJumpButton.addEventListener('click', () => {
+        charPanel.scrollIntoView({ behavior: 'smooth', block: 'start' });
+    });
+    characterJumpButton.style.display = 'none';
+    container.appendChild(characterJumpButton);
+
+    const characterValues = () => readCharInputs();
+    const renderBossSection = (section, entry) => {
+        section.innerHTML = '';
+        const refreshBossDamage = () => {
+            const previousCard = section.querySelector('.dc-boss-result');
+            if (previousCard) previousCard.remove();
+            const overrides = {};
+            const calculated = calculateBossDamage(entry, section, characterValues(), overrides);
+            renderBossDamageCard(section, entry, calculated.damageResults, calculated.enemyAttackResults, '', true);
+        };
+        const inputPanel = createBossInputPanel(entry, refreshBossDamage);
+        section.appendChild(inputPanel);
+        refreshBossDamage();
+    };
+
+    const renderRecentMode = () => {
+        bossWorkspace.innerHTML = '';
+        const heading = document.createElement('h3');
+        heading.textContent = 'Recent final bosses by type and class';
+        bossWorkspace.appendChild(heading);
+        const note = document.createElement('p');
+        note.className = 'dc-boss-note';
+        note.textContent = 'Each card uses the most recent final boss available for that type and class. The image opens its exact phase.';
+        bossWorkspace.appendChild(note);
+        const recentGrid = document.createElement('div');
+        recentGrid.className = 'dc-recent-grid';
+        bossWorkspace.appendChild(recentGrid);
+        getRecentBossEntries().forEach(entry => {
+            const section = document.createElement('section');
+            section.className = 'dc-recent-boss';
+            recentGrid.appendChild(section);
+            const standardInputs = Object.fromEntries(getBossInputDefinitions(entry).map(input => [input.id, input.default ?? 0]));
+            const fullInputs = findFullPassiveInputs(entry);
+            const standard = calculateBossDamage(entry, section, characterValues(), standardInputs);
+            const full = calculateBossDamage(entry, section, characterValues(), fullInputs);
+            renderRecentBossCard(section, entry, { ...standard, inputs: standardInputs }, { ...full, inputs: fullInputs });
+        });
+    };
+
+    const renderSearchMode = () => {
+        bossWorkspace.innerHTML = '';
+        const heading = document.createElement('h3');
+        heading.textContent = 'Choose a boss';
+        bossWorkspace.appendChild(heading);
+        const results = document.createElement('div');
+        results.className = 'dc-boss-search-results';
+        const selected = document.createElement('div');
+        selected.className = 'dc-selected-boss';
+        const entries = getAllBossEntries().reverse();
+        const drawResults = () => {
+            results.innerHTML = '';
+            const matches = entries.filter(entry => bossSearchMatches(entry, searchInput.value)).slice(0, 30);
+            matches.forEach(entry => {
+                const button = document.createElement('button');
+                button.type = 'button';
+                button.className = 'dc-boss-search-result';
+            const image = createEnemyImageContainer(entry.enemy);
+            image.classList.add('dc-search-enemy-image');
+            button.appendChild(image);
+
+                const eventTitle = document.createElement('span');
+                eventTitle.className = 'dc-search-event-title dc-search-enemy-info';
+                eventTitle.textContent = entry.event.name;
+                const location = document.createElement('span');
+                location.className = 'dc-search-location';
+                const locationParts = [entry.stage.name];
+                if ((entry.stage.battles || []).length > 1) locationParts.push(entry.battle.name);
+                locationParts.push(entry.phase.name);
+                location.textContent = locationParts.join(' / ');
+                button.appendChild(eventTitle);
+                button.appendChild(location);
+                button.addEventListener('click', () => {
+                    selected.innerHTML = '';
+                    selected.__entry = entry;
+                    renderBossSection(selected, entry);
+                });
+                results.appendChild(button);
+            });
+            if (!matches.length) {
+                const empty = document.createElement('p');
+                empty.className = 'dc-boss-note';
+                empty.textContent = 'No bosses match those search terms.';
+                results.appendChild(empty);
+            }
+        };
+        const searchWrapper = createSearchBar(
+            'Search name, type, rarity, event, stage, or battle...',
+            drawResults,
+            false
+        );
+        const searchInput = searchWrapper.querySelector('.search-input');
+        searchInput.classList.add('dc-boss-search');
+        searchInput.type = 'search';
+        searchInput.setAttribute('aria-label', 'Search bosses');
+        bossWorkspace.appendChild(searchWrapper);
+        bossWorkspace.appendChild(results);
+        bossWorkspace.appendChild(selected);
+        drawResults();
+        runBossMode = () => {
+            if (selected.__entry) renderBossSection(selected, selected.__entry);
+        };
+    };
+
+    const activateMode = mode => {
+        activeMode = mode;
+        Object.entries(modeButtons).forEach(([key, button]) => button.classList.toggle('active', key === mode));
+        const manual = mode === 'manual';
+        enemyPanel.style.display = manual ? '' : 'none';
+        resultsSection.style.display = manual ? '' : 'none';
+        bossWorkspace.style.display = manual ? 'none' : 'block';
+        characterJumpButton.style.display = manual ? 'none' : 'flex';
+        if (mode === 'recent') renderRecentMode();
+        if (mode === 'boss') renderSearchMode();
+        if (manual) runCalculation();
+    };
+    Object.entries(modeButtons).forEach(([mode, button]) => button.addEventListener('click', () => activateMode(mode)));
+    activateMode('manual');
 
     // Defer first calculation until after performPageTransition adds us to the DOM
     requestAnimationFrame(() => requestAnimationFrame(() => runCalculation()));
@@ -928,7 +1386,7 @@ function showStagesPage(container, eventId) {
             cardContent.appendChild(nameEl);
             card.appendChild(cardContent);
 
-            card.addEventListener('click', () => {
+            makeInteractiveCard(card, () => {
                 const battles = getStageBattles(stage);
                 if (battles.length === 1) {
                     showPage('enemies', eventId, stage.id, battles[0].id);
@@ -942,21 +1400,16 @@ function showStagesPage(container, eventId) {
         });
     };
 
-    renderStages(event.stages);
-    container.appendChild(grid);
-
-    const searchInput = searchWrapper.querySelector('.search-input');
-    searchInput.addEventListener('input', debounce((e) => {
-        const query = e.target.value.toLowerCase().trim();
-        
-        // Search stages by name, battles by name, or enemies by name
+    // Search stages by name, battles by name, or enemies by name
+    const applyStageFilter = (rawQuery) => {
+        const query = (rawQuery || '').toLowerCase().trim();
         const filtered = event.stages.filter(stage => {
             if (searchMatches(stage.name, query)) return true;
-            
+
             const battles = getStageBattles(stage);
             for (const battle of battles) {
                 if (searchMatches(battle.name, query)) return true;
-                
+
                 for (const phase of battle.phases || []) {
                     for (const enemy of phase.enemies || []) {
                         if (searchMatches(enemy.name, query)) return true;
@@ -965,9 +1418,16 @@ function showStagesPage(container, eventId) {
             }
             return false;
         });
-        
         renderStages(filtered);
-    }, 300));
+    };
+
+    // Re-apply the persisted query (if any) so a restored search bar always
+    // matches the rendered results
+    applyStageFilter(NavigationState.currentSearch);
+    container.appendChild(grid);
+
+    const searchInput = searchWrapper.querySelector('.search-input');
+    searchInput.addEventListener('input', debounce((e) => applyStageFilter(e.target.value), 300));
 }
 
 /**
@@ -1030,23 +1490,18 @@ function showBattlesPage(container, eventId, stageId) {
             cardContent.appendChild(nameEl);
             card.appendChild(cardContent);
             
-            card.addEventListener('click', () => showPage('enemies', eventId, stageId, battle.id));
+            makeInteractiveCard(card, () => showPage('enemies', eventId, stageId, battle.id));
             setupCardTooltip(card, battle.name);
             grid.appendChild(card);
         });
     };
 
-    renderBattles(battles);
-    container.appendChild(grid);
-
-    const searchInput = searchWrapper.querySelector('.search-input');
-    searchInput.addEventListener('input', debounce((e) => {
-        const query = e.target.value.toLowerCase().trim();
-        
-        // Search battles by name or enemies by name
+    // Search battles by name or enemies by name
+    const applyBattleFilter = (rawQuery) => {
+        const query = (rawQuery || '').toLowerCase().trim();
         const filtered = battles.filter(battle => {
             if (searchMatches(battle.name, query)) return true;
-            
+
             for (const phase of battle.phases || []) {
                 for (const enemy of phase.enemies || []) {
                     if (searchMatches(enemy.name, query)) return true;
@@ -1054,9 +1509,16 @@ function showBattlesPage(container, eventId, stageId) {
             }
             return false;
         });
-        
         renderBattles(filtered);
-    }, 300));
+    };
+
+    // Re-apply the persisted query (if any) so a restored search bar always
+    // matches the rendered results
+    applyBattleFilter(NavigationState.currentSearch);
+    container.appendChild(grid);
+
+    const searchInput = searchWrapper.querySelector('.search-input');
+    searchInput.addEventListener('input', debounce((e) => applyBattleFilter(e.target.value), 300));
 }
 
 /**
@@ -1067,7 +1529,7 @@ function showBattlesPage(container, eventId, stageId) {
  * @param {string} stageId - ID of selected stage
  * @param {string} battleId - ID of selected battle
  */
-function showEnemiesPage(container, eventId, stageId, battleId) {
+function showEnemiesPage(container, eventId, stageId, battleId, phaseId = null) {
     const event = gameData.events.find(e => e.id === eventId);
     const stage = event?.stages.find(s => s.id === stageId);
     if (!stage) return;
@@ -1132,6 +1594,17 @@ function showEnemiesPage(container, eventId, stageId, battleId) {
             tab.dataset.phaseId = phase.id;
             
             tab.addEventListener('click', () => {
+                // Capture current phase inputs before switching
+                const currentActiveTab = document.querySelector('.phase-tab.active');
+                if (currentActiveTab && currentActiveTab.dataset.phaseId) {
+                    const currentPhaseId = currentActiveTab.dataset.phaseId;
+                    const formsContainer = document.getElementById('enemy-forms-container');
+                    if (formsContainer) {
+                        const currentPhaseSnapshot = capturePhaseInputValues(null);
+                        rememberPhaseInputSnapshot(currentPhaseId, currentPhaseSnapshot);
+                    }
+                }
+
                 // Update active tab
                 document.querySelectorAll('.phase-tab').forEach(t => {
                     t.classList.remove('active');
@@ -1151,6 +1624,12 @@ function showEnemiesPage(container, eventId, stageId, battleId) {
                     // Update content after fade starts
                     setTimeout(() => {
                         displayEnemiesForPhase(formsContainer, phase, battle.phases.length);
+                        
+                        // Restore previously saved inputs for this phase
+                        if (phaseInputSnapshots && phaseInputSnapshots[phase.id]) {
+                            restorePhaseInputValues(phase, phaseInputSnapshots[phase.id]);
+                        }
+
                         // Fade back in
                         formsContainer.style.opacity = '1';
                         formsContainer.style.transition = 'opacity 0.35s ease-in';
@@ -1177,7 +1656,15 @@ function showEnemiesPage(container, eventId, stageId, battleId) {
 
     // Display enemies for the first phase by default
     if (battle.phases.length > 0) {
-        displayEnemiesForPhase(enemyFormsContainer, battle.phases[0], battle.phases.length);
+        const initialPhase = battle.phases.find(phase => phase.id === phaseId) || battle.phases[0];
+        displayEnemiesForPhase(enemyFormsContainer, initialPhase, battle.phases.length);
+        if (phaseId && initialPhase.id !== battle.phases[0].id) {
+            phaseTabsContainer.querySelectorAll('.phase-tab').forEach(tab => {
+                const active = tab.dataset.phaseId === initialPhase.id;
+                tab.classList.toggle('active', active);
+                tab.setAttribute('aria-selected', active ? 'true' : 'false');
+            });
+        }
     }
 }
 
@@ -1214,14 +1701,26 @@ function displayEnemiesForPhase(container, phase, totalPhases = 1) {
         sharedDamageResults.style.display = 'none';
     }
 
-    // Render each enemy in the phase
+    // Defeated-enemies tray: resurrect UI for enemies removed via their ✕ button
+    if (getDefeatedEnemyIds(phase.id).length > 0) {
+        container.appendChild(createDefeatedTray(phase));
+    }
+
+    // Phase-wide inputs panel (shared by every enemy of this phase)
+    if (Array.isArray(phase.globalInputs) && phase.globalInputs.length > 0) {
+        container.appendChild(createPhaseInputsPanel(phase));
+    }
+
+    // Render each enemy in the phase (defeated ones are removed from the page)
     phase.enemies.forEach(enemy => {
         if (!enemy.id) {
             console.warn('displayEnemiesForPhase: skipping enemy without id');
             return;
         }
 
-        createEnemyForm(container, enemy);
+        if (isEnemyDefeated(phase.id, enemy.id)) return;
+
+        createEnemyForm(container, enemy, phase);
     });
 
     // Attach character input listeners (safe even when panel is detached)
@@ -1239,38 +1738,212 @@ function displayEnemiesForPhase(container, phase, totalPhases = 1) {
 }
 
 /**
+ * Create the phase-wide inputs panel: inputs shared by every enemy of a phase.
+ * Rendered once above the enemy forms. Element ids are namespaced by the phase
+ * id ("${phase.id}_${input.id}") so they never collide with enemy inputs; the
+ * calculator merges their values into every enemy's inputs automatically.
+ * Changing any of them recalculates the whole phase.
+ * @param {Object} phase - Phase data object with a globalInputs array
+ * @returns {HTMLElement} The panel element
+ */
+function createPhaseInputsPanel(phase) {
+    const panel = document.createElement('div');
+    panel.className = 'enemy-form phase-inputs-panel';
+    panel.id = `phase-inputs-${phase.id}`;
+
+    const heading = document.createElement('h4');
+    heading.className = 'phase-inputs-title';
+    heading.textContent = '⚙️ Phase-wide inputs';
+    panel.appendChild(heading);
+
+    const note = document.createElement('p');
+    note.className = 'phase-inputs-note';
+    note.textContent = 'Shared by every enemy in this phase — set them once here.';
+    panel.appendChild(note);
+
+    const formGroup = document.createElement('div');
+    formGroup.className = 'phase-inputs-group';
+    (phase.globalInputs || []).forEach(input => {
+        const inputElement = createInputField(phase.id, input, () => recalculatePhaseEnemies(phase));
+        if (inputElement) {
+            formGroup.appendChild(inputElement);
+        }
+    });
+    panel.appendChild(formGroup);
+
+    return panel;
+}
+
+// In-memory per-phase snapshots of the last known input values — they let a
+// resurrected enemy come back with the values it had when it was defeated.
+const phaseInputSnapshots = {};
+
+function rememberPhaseInputSnapshot(phaseId, snapshot) {
+    phaseInputSnapshots[phaseId] = { ...(phaseInputSnapshots[phaseId] || {}), ...snapshot };
+}
+
+function mergedPhaseSnapshot(phaseId, fresh) {
+    return { ...(phaseInputSnapshots[phaseId] || {}), ...fresh };
+}
+
+/**
+ * Snapshot the current values of every rendered input of the phase (enemy
+ * inputs + phase-wide inputs), keyed by DOM element id — used so that
+ * defeat/resurrect re-renders keep the user's typed values instead of
+ * resetting them to defaults.
+ * @param {Object} phase - Phase data object
+ * @returns {Object} id → { type, value } (value is a string, or a boolean for checkboxes)
+ */
+function capturePhaseInputValues(phase) {
+    const snapshot = {};
+    const container = document.getElementById('enemy-forms-container');
+    if (!container) return snapshot;
+    container.querySelectorAll('input').forEach(el => {
+        if (!el.id) return;
+        snapshot[el.id] = { type: el.type, value: el.type === 'checkbox' ? el.checked : el.value };
+    });
+    return snapshot;
+}
+
+/**
+ * Re-apply a snapshot taken by capturePhaseInputValues after a
+ * defeat/resurrect re-render, then recalculate the phase — every enemy's
+ * current input values (including the defeated/resurrected one's) are
+ * preserved. Checkboxes get a change event so their toggle visuals re-sync.
+ * @param {Object} phase - Phase data object
+ * @param {Object} snapshot - id → { type, value }
+ */
+function restorePhaseInputValues(phase, snapshot) {
+    if (!snapshot) return;
+    Object.keys(snapshot).forEach(id => {
+        const el = document.getElementById(id);
+        if (!el) return;
+        const saved = snapshot[id];
+        if (el.type === 'checkbox') {
+            const changed = el.checked !== (saved.value === true);
+            el.checked = saved.value === true;
+            if (changed) el.dispatchEvent(new Event('change', { bubbles: true }));
+        } else {
+            el.value = saved.value;
+        }
+    });
+    recalculatePhaseEnemies(phase);
+}
+
+/**
+ * Create the defeated-enemies tray: one chip per defeated enemy of the phase,
+ * each with a ↺ resurrect button (in case of mistakes). Rendered above the
+ * phase-wide inputs panel whenever at least one enemy is defeated.
+ * @param {Object} phase - Phase data object
+ * @returns {HTMLElement} The tray element
+ */
+function createDefeatedTray(phase) {
+    const tray = document.createElement('div');
+    tray.className = 'defeated-tray';
+
+    const title = document.createElement('span');
+    title.className = 'defeated-tray-title';
+    title.textContent = '☠️ Defeated (resurrect):';
+    tray.appendChild(title);
+
+    getDefeatedEnemyIds(phase.id).forEach(id => {
+        const enemy = (phase.enemies || []).find(e => String(e.id) === String(id));
+        const chip = document.createElement('span');
+        chip.className = 'defeated-chip';
+
+        const name = document.createElement('span');
+        name.textContent = enemy ? enemy.name : `Enemy ${id}`;
+        chip.appendChild(name);
+
+        const resurrectBtn = document.createElement('button');
+        resurrectBtn.type = 'button';
+        resurrectBtn.className = 'defeated-resurrect-btn';
+        resurrectBtn.title = `Resurrect "${enemy ? enemy.name : id}"`;
+        resurrectBtn.setAttribute('aria-label', resurrectBtn.title);
+        resurrectBtn.addEventListener('click', () => {
+            const fresh = capturePhaseInputValues(phase);
+            resurrectEnemy(phase.id, id);
+            const formsContainer = document.getElementById('enemy-forms-container');
+            if (formsContainer) {
+                displayEnemiesForPhase(formsContainer, phase);
+                restorePhaseInputValues(phase, mergedPhaseSnapshot(phase.id, fresh));
+            }
+        });
+        chip.appendChild(resurrectBtn);
+
+        tray.appendChild(chip);
+    });
+
+    return tray;
+}
+
+/**
  * Create a single enemy form with inputs and results display
  * Extracted to reduce function complexity and improve maintainability
  * @param {HTMLElement} container - Parent container to append form to
  * @param {Object} enemy - Enemy data object
+ * @param {Object} phase - Phase data object the enemy belongs to (used by the
+ *        defeat button's per-phase state and re-render)
  */
-function createEnemyForm(container, enemy) {
+function createEnemyForm(container, enemy, phase) {
     const enemyForm = document.createElement('div');
     enemyForm.className = 'enemy-form';
     enemyForm.id = AppConfig.idPatterns.enemy(enemy.id);
 
-    // Add enemy name heading
+    // Add enemy name heading (with the defeat ✕ button on the right).
+    // Balanced layout: [24px spacer][name centered in between][✕ button] so
+    // the button never overlaps the name, even for very long enemy names.
     const nameHeading = document.createElement('div');
     nameHeading.style.display = 'flex';
     nameHeading.style.alignItems = 'center';
-    nameHeading.style.justifyContent = 'center';
+    nameHeading.style.gap = '6px';
     nameHeading.style.marginBottom = '15px';
+
+    const headingSpacer = document.createElement('span');
+    headingSpacer.style.width = '24px';
+    headingSpacer.style.flexShrink = '0';
+    nameHeading.appendChild(headingSpacer);
 
     const h4 = document.createElement('h4');
     h4.textContent = enemy.name || 'Unknown Enemy';
     h4.style.margin = '0';
+    h4.style.flex = '1';
+    h4.style.minWidth = '0';
+    h4.style.textAlign = 'center';
+    h4.style.overflowWrap = 'anywhere';
     nameHeading.appendChild(h4);
+
+    // ✕ = mark this enemy as defeated: its card is removed from the page and
+    // every other formula can query it via inputs.defeated_<enemyId>.
+    // Reversible from the defeated-enemies tray.
+    const defeatBtn = document.createElement('button');
+    defeatBtn.type = 'button';
+    defeatBtn.className = 'enemy-defeat-btn';
+    defeatBtn.title = `Mark "${enemy.name}" as defeated (resurrectable)`;
+    defeatBtn.setAttribute('aria-label', defeatBtn.title);
+    defeatBtn.addEventListener('click', () => {
+        const fresh = capturePhaseInputValues(phase);
+        rememberPhaseInputSnapshot(phase.id, fresh);
+        defeatEnemy(phase.id, enemy.id);
+        const formsContainer = document.getElementById('enemy-forms-container');
+        if (formsContainer) {
+            displayEnemiesForPhase(formsContainer, phase);
+            restorePhaseInputValues(phase, mergedPhaseSnapshot(phase.id, fresh));
+        }
+    });
+    nameHeading.appendChild(defeatBtn);
+
     enemyForm.appendChild(nameHeading);
 
     // Create image container with card artwork and overlays
     const imgContainer = createEnemyImageContainer(enemy);
     enemyForm.appendChild(imgContainer);
 
-    // Create input fields section
+    // Create input fields section (phase-wide inputs live in the shared panel)
     const formGroup = document.createElement('div');
     if (enemy.inputs && Array.isArray(enemy.inputs)) {
         enemy.inputs.forEach(input => {
-            const inputElement = createInputField(enemy, input);
+            const inputElement = createInputField(enemy.id, input, () => calculateATK(enemy));
             if (inputElement) {
                 formGroup.appendChild(inputElement);
             }
@@ -1300,29 +1973,11 @@ function createEnemyForm(container, enemy) {
     copyBtn.className = 'btn-copy-results';
     copyBtn.textContent = '📋 Copy Results';
     copyBtn.addEventListener('click', async () => {
-        // Gather input values the same way calculateATK does (with defaults applied)
-        const inputs = {};
-        if (enemy.inputs && Array.isArray(enemy.inputs)) {
-            for (const input of enemy.inputs) {
-                const inputElement = document.getElementById(AppConfig.idPatterns.input(enemy.id, input.id));
-                if (!inputElement) {
-                    inputs[input.id] = input.default ?? AppConfig.defaults.emptyInputValue;
-                    continue;
-                }
-                if (input.type === 'checkbox') {
-                    inputs[input.id] = inputElement.checked;
-                } else {
-                    const rawValue = inputElement.value.trim();
-                    if (rawValue === '') {
-                        inputs[input.id] = input.default ?? AppConfig.defaults.emptyInputValue;
-                    } else {
-                        const parsedValue = parseFloat(rawValue);
-                        inputs[input.id] = isNaN(parsedValue) ? (input.default ?? AppConfig.defaults.emptyInputValue) : parsedValue;
-                    }
-                }
-            }
-        }
-        const resultsText = formatResultsForClipboard(enemy, resultsValues, inputs);
+        // Gather input values the same way calculateATK does
+        // (own inputs + phase-wide inputs, defaults applied)
+        const inputs = collectEnemyInputValues(enemy, enemyForm);
+        const inputDefs = collectEnemyInputDefs(enemy);
+        const resultsText = formatResultsForClipboard(enemy, resultsValues, inputs, inputDefs);
         await ClipboardOps.copy(resultsText, copyBtn);
     });
     resultsActions.appendChild(copyBtn);
@@ -1568,11 +2223,13 @@ function createPhaseDamageCalculator(container, onModeChange) {
             inputElement.type = 'checkbox';
             inputElement.id = inputId;
             inputElement.checked = isChecked;
+            inputElement.setAttribute('aria-label', input.label);
             inputElement.style.position = 'absolute';
             inputElement.style.opacity = '0';
-            inputElement.style.pointerEvents = 'none';
-            inputElement.style.width = '0';
-            inputElement.style.height = '0';
+            inputElement.style.width = '1px';
+            inputElement.style.height = '1px';
+            inputElement.style.margin = '-1px';
+            inputElement.style.clip = 'rect(0 0 0 0)';
 
             // Visual toggle track
             const toggleTrack = document.createElement('div');
@@ -1608,7 +2265,6 @@ function createPhaseDamageCalculator(container, onModeChange) {
             label.style.color = isChecked ? 'var(--color-accent)' : 'var(--color-text-muted)';
             label.style.fontWeight = isChecked ? '600' : '500';
             label.style.transition = 'color 0.2s ease, font-weight 0.2s ease';
-            label.htmlFor = inputId;
 
             const updateToggle = (checked) => {
                 inputElement.checked = checked;
@@ -1625,6 +2281,7 @@ function createPhaseDamageCalculator(container, onModeChange) {
                 updateToggle(!inputElement.checked);
                 inputElement.dispatchEvent(new Event('change', { bubbles: true }));
             });
+            inputElement.addEventListener('click', (event) => event.stopPropagation());
 
             inputGroup.appendChild(inputElement);
             inputGroup.appendChild(toggleTrack);
@@ -1789,19 +2446,24 @@ function createPhaseDamageCalculator(container, onModeChange) {
  * @param {Object} enemy - Enemy data
  * @param {HTMLElement} resultsValuesContainer - Container with result values
  * @param {Object} inputs - Input values used for calculation
+ * @param {Array} [inputDefsOverride] - Input definitions to render as
+ *        conditions (phase-wide + enemy); defaults to enemy.inputs
  * @returns {string} Formatted results text
  */
-function formatResultsForClipboard(enemy, resultsValuesContainer, inputs) {
+function formatResultsForClipboard(enemy, resultsValuesContainer, inputs, inputDefsOverride) {
     const lines = [];
     lines.push('═══════════════════════════════════');
     lines.push(`  ${enemy.name}`);
     lines.push('═══════════════════════════════════');
     lines.push('');
     
-    // Add input conditions with better formatting
-    if (enemy.inputs && Array.isArray(enemy.inputs) && enemy.inputs.length > 0) {
+    // Add input conditions with better formatting (phase-wide inputs included)
+    const inputDefs = (Array.isArray(inputDefsOverride) && inputDefsOverride.length > 0)
+        ? inputDefsOverride
+        : enemy.inputs;
+    if (inputDefs && Array.isArray(inputDefs) && inputDefs.length > 0) {
         lines.push('📋 CONDITIONS USED:');
-        for (const input of enemy.inputs) {
+        for (const input of inputDefs) {
             const value = inputs[input.id];
             if (value !== null && value !== undefined) {
                 if (typeof value === 'boolean') {
@@ -1891,13 +2553,16 @@ function createEnemyImageContainer(enemy) {
 
 /**
  * Create a single input field (number, text, or checkbox)
- * @param {Object} enemy - Enemy data object
- * @param {Object} input - Input definition from enemy.inputs
+ * Owner-agnostic: used both for enemy inputs (ownerId = enemy id) and for
+ * phase-wide inputs (ownerId = phase id).
+ * @param {string} ownerId - Enemy or phase id (DOM id prefix)
+ * @param {Object} input - Input definition
+ * @param {Function} onRecalc - Recalculation callback fired on value change
  * @returns {HTMLElement|null} Form group element or null if invalid
  */
-function createInputField(enemy, input) {
-    if (!input.id || !input.label) {
-        console.warn(`Invalid input definition for enemy ${enemy.id}`);
+function createInputField(ownerId, input, onRecalc) {
+    if (!input.id || !input.label || typeof onRecalc !== 'function') {
+        console.warn(`Invalid input definition for owner ${ownerId}`);
         return null;
     }
 
@@ -1905,7 +2570,7 @@ function createInputField(enemy, input) {
     formGroup.className = 'form-group';
 
     if (input.type === 'checkbox') {
-        // Toggle-style checkbox for enemy-specific boolean inputs
+        // Toggle-style checkbox for boolean inputs (enemy or phase-wide)
         const toggleRow = document.createElement('div');
         toggleRow.style.display = 'flex';
         toggleRow.style.alignItems = 'center';
@@ -1921,13 +2586,15 @@ function createInputField(enemy, input) {
 
         const hiddenCheck = document.createElement('input');
         hiddenCheck.type = 'checkbox';
-        hiddenCheck.id = AppConfig.idPatterns.input(enemy.id, input.id);
+        hiddenCheck.id = AppConfig.idPatterns.input(ownerId, input.id);
         hiddenCheck.checked = isChecked;
+        hiddenCheck.setAttribute('aria-label', input.label);
         hiddenCheck.style.position = 'absolute';
         hiddenCheck.style.opacity = '0';
-        hiddenCheck.style.pointerEvents = 'none';
-        hiddenCheck.style.width = '0';
-        hiddenCheck.style.height = '0';
+        hiddenCheck.style.width = '1px';
+        hiddenCheck.style.height = '1px';
+        hiddenCheck.style.margin = '-1px';
+        hiddenCheck.style.clip = 'rect(0 0 0 0)';
 
         const track = document.createElement('div');
         track.style.flexShrink = '0';
@@ -1967,13 +2634,18 @@ function createInputField(enemy, input) {
             toggleRow.style.backgroundColor = checked ? 'rgba(99, 179, 237, 0.1)' : 'rgba(99, 179, 237, 0.05)';
             toggleRow.style.borderColor = checked ? 'rgba(99, 179, 237, 0.35)' : 'rgba(99, 179, 237, 0.15)';
         };
+        hiddenCheck.syncToggleVisual = () => updateToggle(hiddenCheck.checked);
 
         toggleRow.addEventListener('click', () => {
             updateToggle(!hiddenCheck.checked);
             hiddenCheck.dispatchEvent(new Event('change', { bubbles: true }));
         });
+        hiddenCheck.addEventListener('click', (event) => event.stopPropagation());
 
-        hiddenCheck.addEventListener('change', () => calculateATK(enemy));
+        hiddenCheck.addEventListener('change', () => {
+            updateToggle(hiddenCheck.checked);
+            onRecalc();
+        });
 
         toggleRow.appendChild(hiddenCheck);
         toggleRow.appendChild(track);
@@ -1982,12 +2654,12 @@ function createInputField(enemy, input) {
     } else {
         // Text/number input with label
         const label = document.createElement('label');
-        label.htmlFor = AppConfig.idPatterns.input(enemy.id, input.id);
+        label.htmlFor = AppConfig.idPatterns.input(ownerId, input.id);
         label.textContent = input.label;
 
         const inputElement = document.createElement('input');
         inputElement.type = input.type || 'text';
-        inputElement.id = AppConfig.idPatterns.input(enemy.id, input.id);
+        inputElement.id = AppConfig.idPatterns.input(ownerId, input.id);
 
         // Use placeholder instead of pre-filling the value
         if (input.type === 'number') {
@@ -2007,12 +2679,12 @@ function createInputField(enemy, input) {
                 input.min,
                 input.max,
                 input.default || 0,
-                enemy
+                onRecalc
             );
         } else if (input.type === 'number') {
             // Simple change listener for number inputs without constraints
             inputElement.addEventListener('change', function () {
-                calculateATK(enemy);
+                onRecalc();
             });
         }
 
@@ -2021,4 +2693,62 @@ function createInputField(enemy, input) {
     }
 
     return formGroup;
+}
+
+function createRecentPassiveSummary(entry, standardInputs, fullInputs) {
+    const summary = document.createElement('div');
+    summary.className = 'dc-recent-passive-summary';
+    for (const [title, inputs] of [['Standard', standardInputs], ['Full', fullInputs]]) {
+        const column = document.createElement('div');
+        column.className = 'dc-recent-passive-column';
+        const heading = document.createElement('strong');
+        heading.textContent = title;
+        column.appendChild(heading);
+        for (const input of getBossInputDefinitions(entry)) {
+            const row = document.createElement('div');
+            row.className = 'dc-recent-passive-row';
+            const label = document.createElement('span');
+            label.textContent = input.label;
+            const value = document.createElement('b');
+            const inputValue = inputs[input.id];
+            value.textContent = input.type === 'checkbox' ? (inputValue ? 'Yes' : 'No') : String(inputValue ?? 0);
+            row.appendChild(label);
+            row.appendChild(value);
+            column.appendChild(row);
+        }
+        summary.appendChild(column);
+    }
+    return summary;
+}
+
+function renderRecentBossCard(container, entry, standard, full) {
+    const card = document.createElement('article');
+    card.className = 'dc-boss-result dc-recent-result';
+
+    const heading = document.createElement('h3');
+    heading.textContent = `${entry.type} ${entry.class} · ${entry.enemy.name}`;
+    card.appendChild(heading);
+    card.appendChild(createBossMeta(entry));
+
+    const body = document.createElement('div');
+    body.className = 'dc-recent-result-body';
+    const imageLink = createBossPhaseLink(entry);
+    imageLink.appendChild(createEnemyImageContainer(entry.enemy));
+    body.appendChild(imageLink);
+
+    const damageColumns = document.createElement('div');
+    damageColumns.className = 'dc-recent-damage-columns';
+    for (const result of [standard, full]) {
+        const column = document.createElement('div');
+        column.className = 'dc-recent-damage-column';
+        const title = document.createElement('strong');
+        title.textContent = 'DMG';
+        column.appendChild(title);
+        column.appendChild(createBossDamageValues(entry, result.damageResults, result.enemyAttackResults));
+        damageColumns.appendChild(column);
+    }
+    body.appendChild(damageColumns);
+    card.appendChild(body);
+    card.appendChild(createRecentPassiveSummary(entry, standard.inputs, full.inputs));
+    container.appendChild(card);
 }

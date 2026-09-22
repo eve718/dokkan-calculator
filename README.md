@@ -1,6 +1,6 @@
 # Dokkan Battle Enemy ATK Calculator
 
-A free calculator for Dokkan Battle players to predict how much damage an enemy will deal during a fight. Navigate to the phase you're fighting, input your scenario (phase conditions, buffs, debuffs, etc.), and instantly see attack damage predictions. Copy results to share with other players for help, or download enemy images to use in discussions.
+A free calculator for Dokkan Battle players to predict how much damage an enemy will deal during a fight. Navigate to the phase you're fighting, input your scenario (phase conditions, buffs, debuffs, etc.), and instantly see attack damage predictions. Copy results to share with other players for help.
 
 **Live:** https://dokkan-battle-atk-calculator.netlify.app/
 
@@ -9,8 +9,6 @@ A free calculator for Dokkan Battle players to predict how much damage an enemy 
 - **Instant damage predictions** - Choose your fight scenario and see how hard the enemy hits
 - **Real-time calculations** - Adjust inputs and watch results update instantly
 - **Copy results** - Share your calculation with other players to ask for help
-- **Download enemy images** - Save and share enemy stats with the community
-- **Favorite phases** - Quick access to phases you fight frequently or plan to revisit
 - **Comprehensive breakdowns** - View normal attacks, super attacks, AOE damage, and more
 - **Works on mobile & desktop** - Calculate damage predictions anywhere
 
@@ -23,7 +21,7 @@ A free calculator for Dokkan Battle players to predict how much damage an enemy 
 5. **Select the enemy** you're facing
 6. **Input your fight scenario** (current conditions, the enemy's state, any buffs/debuffs, etc.)
 7. **See the damage prediction** - Instant results for normal attacks, super attacks, and AOE attacks
-8. **Copy or download** to share with other players or save for reference
+8. **Copy** to share with other players or save for reference
 
 ## Development
 
@@ -50,15 +48,15 @@ npm install
 ```
 ├── index.html              # Main HTML file
 ├── js/
-│   ├── data.js            # Game data (events, stages, bosses)
-│   ├── formulas.js        # Damage calculation formulas
+│   ├── data.js            # Source game data
+│   ├── formulas.js        # Source calculation formulas
 │   ├── navigation.js      # Page routing and UI rendering
 │   ├── calculator.js      # Input handling and result updates
 │   └── app.js             # Bootstrap script
 ├── css/
 │   ├── style.css          # Main styles and animations
 │   └── responsive.css     # Mobile breakpoints
-├── dist/                  # Obfuscated production files
+├── dist/                  # Obfuscated production data and formulas
 ├── images/
 │   ├── events/            # Event card images
 │   ├── enemies/           # Boss/enemy character art
@@ -101,7 +99,7 @@ The site auto-deploys via Netlify on every push to `main`.
 
 ## License
 
-This site is not affiliated with Bandai Namco Entertainment. Dragon Ball Z Dokkan Battle is their trademark. See [LICENSE](LICENSE) for details.
+This site is not affiliated with Bandai Namco Entertainment. Dragon Ball Z Dokkan Battle is their trademark.
 
 ## Support
 

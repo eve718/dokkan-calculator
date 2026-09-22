@@ -6,8 +6,7 @@
 dokkan-calculator/
 ├── index.html                    # Entry point with script load order
 ├── package.json                  # Build scripts and dependencies
-├── REFACTORING_SUMMARY.md       # Complete refactoring documentation (NEW)
-├── CHANGELOG.md                 # Detailed change log (NEW)
+├── docs/                        # Developer documentation and change history
 │
 ├── js/
 │   ├── config.js               # AppConfig central configuration (NEW)
@@ -16,8 +15,10 @@ dokkan-calculator/
 │   ├── navigation.js           # SPA routing and page rendering (REFACTORED)
 │   ├── calculator.js           # Input validation and result display
 │   ├── app.js                  # Application bootstrap
-│   ├── data-obfuscated.js      # Obfuscated data.js (production)
-│   └── formulas-obfuscated.js  # Obfuscated formulas.js (production)
+│
+├── dist/
+│   ├── data-obfuscated.js       # Obfuscated data.js (production)
+│   └── formulas-obfuscated.js   # Obfuscated formulas.js (production)
 │
 ├── css/
 │   ├── style.css               # Main stylesheet
@@ -34,12 +35,14 @@ dokkan-calculator/
 
 ⚠️ **MUST be followed - script order determines what's available:**
 
-1. **config.js** (NEW) - AppConfig must load FIRST
-2. **data.js** - Game data structure
-3. **formulas.js** - Calculation functions
-4. **navigation.js** - UI routing (depends on data, calculator, config)
-5. **calculator.js** - Input handling (depends on formulas, config)
-6. **app.js** - Bootstrap (depends on navigation)
+1. **config.js** - AppConfig must load FIRST
+2. **utilities.js** - Shared browser utilities
+3. **dist/data-obfuscated.js** - Production game data
+4. **dist/formulas-obfuscated.js** - Production calculation functions
+5. **damage-formulas.js** - Damage mode calculations
+6. **navigation.js** - UI routing and rendering
+7. **calculator.js** - Input handling and result display
+8. **app.js** - Bootstrap
 
 ❌ **If you change script order, the app breaks!**
 
@@ -59,14 +62,12 @@ const delay = AppConfig.inputDebounceDelay;       // 500ms
 AppConfig.pageTransitionDuration    // 300ms - Page fade animations
 AppConfig.inputDebounceDelay        // 500ms - Input field validation delay
 AppConfig.inputCorrectionDelay      // 800ms - Auto-correct timing
-AppConfig.retryCheckDelay           // 100ms - DOM element retry interval
 
 AppConfig.idPatterns.input(enemyId, inputId)      // Generate input ID
 AppConfig.idPatterns.output(enemyId, outputId)    // Generate output ID
 AppConfig.idPatterns.enemy(enemyId)               // Generate enemy form ID
 
 AppConfig.getInputElement(enemyId, inputId)       // Get input element
-AppConfig.getOutputElement(enemyId, outputId)     // Get output element
 
 AppConfig.cssClasses.pageActive                   // 'active'
 AppConfig.cssClasses.fadeIn                       // 'fade-in'
@@ -342,14 +343,6 @@ formulaFunctions["formula_id"] = function(inputs) {
 // 3. Test in browser - should appear in UI immediately
 ```
 
-### Change Retry Interval for DOM Lookups
-```javascript
-// Edit js/config.js, line ~17
-AppConfig.retryCheckDelay = 100;  // Milliseconds between retry attempts
-
-// Used when elements aren't yet in DOM (rare case)
-```
-
 ---
 
 ## Debugging Tips
@@ -427,8 +420,8 @@ python -m http.server 8000
 ```bash
 npm run obfuscate
 # Creates:
-# - js/data-obfuscated.js
-# - js/formulas-obfuscated.js
+# - dist/data-obfuscated.js
+# - dist/formulas-obfuscated.js
 # Note: config.js is NOT obfuscated (contains reference keys)
 ```
 

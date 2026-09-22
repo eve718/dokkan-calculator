@@ -15,7 +15,6 @@ Comprehensive refactoring to eliminate "spaghetti code" and establish maintainab
   - `pageTransitionDuration: 300ms` - Page fade in/out animations
   - `inputDebounceDelay: 500ms` - Input validation debounce
   - `inputCorrectionDelay: 800ms` - Auto-correct validation delay
-  - `retryCheckDelay: 100ms` - DOM retry attempts interval
 
 - **DOM Selectors:** Centralized all querySelector patterns
 - **CSS Classes:** Named class references for consistency
@@ -198,7 +197,6 @@ function displayEnemiesForPhase(container, phase, totalPhases) {
 | `300` | `AppConfig.pageTransitionDuration` | navigation.js (3+ places) |
 | `500` | `AppConfig.inputDebounceDelay` | calculator.js |
 | `800` | `AppConfig.inputCorrectionDelay` | calculator.js |
-| `100` | `AppConfig.retryCheckDelay` | calculator.js, navigation.js |
 
 ### ID Generation Patterns
 | Before | After | Benefit |
@@ -286,10 +284,6 @@ AppConfig.getInputElement = function(enemyId, inputId) {
     return document.getElementById(elementId);
 };
 
-AppConfig.getOutputElement = function(enemyId, outputId) {
-    const elementId = this.idPatterns.output(enemyId, outputId);
-    return document.getElementById(elementId);
-};
 ```
 
 **Usage:**
